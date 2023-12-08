@@ -1,0 +1,11 @@
+e9cc2c48b543ce5755e0b4888d9919ff *DESCRIPTION
+e1c92c8255d8c470bf6a39bd99cd8322 *LICENSE
+b90dd0df87ba94a075763a31589dbbaf *NAMESPACE
+4f3dc87e23baea5cdf42526f9c5e1d96 *R/blackmarbler.R
+14f32f8007eb4154f0fb607bca775e98 *README.md
+3f10e6bfedd2df92d780d326162c83ee *man/bm_extract.Rd
+0df4bda92278f60f14e5696c008359e6 *man/bm_raster.Rd
+f34b4a5aaaa047f41f980673815c65bb *man/figures/hex.png
+8b3ee27f518efcdf76e233becb083a78 *man/figures/nasa_laads_login.png
+5c4f7f9a0b5a3c54b7a3b314eb7bfb70 *man/figures/ntl_gha.png
+6e3b58ea7f50067c34a98db5eca91cd3 *man/figures/ntl_trends_gha.png
