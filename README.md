@@ -11,7 +11,7 @@
 
 <!-- badges: end -->
 
-**BlackMarbleR** provides a simple and efficient way to retrieve and extract nighttime lights data from NASA's Black Marble project. [Black Marble](https://blackmarble.gsfc.nasa.gov) is a [NASA Earth Observatory](https://earthobservatory.nasa.gov) project that provides a product suite of daily, monthly and yearly global nighttime lights. This package automates the process of downloading all relevant tiles from the [NASA LAADS archive](https://ladsweb.modaps.eosdis.nasa.gov/archive/allData/5000/VNP46A3/) to cover a region of interest, converting the raw files (in HDF5 format), to georeferenced rasters, and mosaicing rasters together when needed.
+**BlackMarbleR** is a R package that provides a simple way to use nighttime lights data from NASA's Black Marble. [Black Marble](https://blackmarble.gsfc.nasa.gov) is a [NASA Earth Science Data Systems (ESDS)](https://www.earthdata.nasa.gov) project that provides a product suite of daily, monthly and yearly global [nighttime lights](https://www.earthdata.nasa.gov/learn/backgrounders/nighttime-lights). This package automates the process of downloading all relevant tiles from the [NASA LAADS DAAC](https://www.earthdata.nasa.gov/eosdis/daacs/laads) to cover a region of interest, converting and mosaicing the raw files (in HDF5 format) to georeferenced rasters.
 
 * [Installation](#installation)
 * [Bearer token](#token)
@@ -197,6 +197,8 @@ ntl_df |>
   labs(x = NULL,
        y = "NTL Luminosity",
        title = "Ghana Admin Level 1: Annual Average Nighttime Lights") +
+  scale_x_continuous(labels = seq(2012, 2022, 4),
+                     breaks = seq(2012, 2022, 4)) +
   theme_minimal() +
   theme(strip.text = element_text(face = "bold"))
 ```
@@ -274,19 +276,17 @@ Both functions take the following arguments:
   * For `product_id` `"VNP46A2"`, uses `Gap_Filled_DNB_BRDF-Corrected_NTL`.
   * For `product_id`s `"VNP46A3"` and `"VNP46A4"`, uses `NearNadir_Composite_Snow_Free`.
 
-* **quality_flag_rm:** Quality flag values to use to set values to `NA`. Each pixel has a quality flag value, where low quality values can be removed. Values are set to `NA` for each value in ther `quality_flag_rm` vector. (Default: `c(255)`).
+* **quality_flag_rm:** Quality flag values to use to set values to `NA`. Each pixel has a quality flag value, where low quality values can be removed. Values are set to `NA` for each value in ther `quality_flag_rm` vector. (Default: `NULL`).
 
   * For `VNP46A1` and `VNP46A2` (daily data):
     * `0`: High-quality, Persistent nighttime lights
     * `1`: High-quality, Ephemeral nighttime Lights
     * `2`: Poor-quality, Outlier, potential cloud contamination, or other issues
-    * `255`: No retrieval, Fill value (masked out on ingestion)
 
   * For `VNP46A3` and `VNP46A4` (monthly and annual data):
     * `0`: Good-quality, The number of observations used for the composite is larger than 3
     * `1`: Poor-quality, The number of observations used for the composite is less than or equal to 3
     * `2`: Gap filled NTL based on historical data
-    * `255`: Fill value
 
 * **check_all_tiles_exist:** Check whether all Black Marble nighttime light tiles exist for the region of interest. Sometimes not all tiles are available, so the full region of interest may not be covered. If `TRUE`, skips cases where not all tiles are available. (Default: `TRUE`).
 * **interpol_na:** When data for more than one date is downloaded, whether to interpolate `NA` values in rasters using the [`raster::approxNA`](https://www.rdocumentation.org/packages/raster/versions/3.6-26/topics/approxNA) function. Additional arguments for the [`raster::approxNA`](https://www.rdocumentation.org/packages/raster/versions/3.6-26/topics/approxNA) function can also be passed into `bm_raster`/`bm_extract` (eg, `method`, `rule`, `f`, `ties`, `z`, `NA_rule`). (Default: `FALSE`).
@@ -298,12 +298,11 @@ Both functions take the following arguments:
 
 If `output_location_type = "file"`, the following arguments can be used:
 
-  * **file_dir:** The directory where data should be exported (default: `NULL`, so the working directory will be used)
-  * **file_prefix:** Prefix to add to the file to be saved. The file will be saved as the following: `[file_prefix][product_id]_t[date].[tif/Rds]`
-  * **file_skip_if_exists:** Whether the function should first check wither the file already exists, and to skip downloading or extracting data if the data for that date if the file already exists (default: `TRUE`). If the function is first run with `date = c(2018, 2019, 2020)`, then is later run with `date = c(2018, 2019, 2020, 2021)`, the function will only download/extract data for 2021. Skipping existing files can facilitate re-running the function at a later date to download only more recent data.
+* **file_dir:** The directory where data should be exported (default: `NULL`, so the working directory will be used)
+* **file_prefix:** Prefix to add to the file to be saved. The file will be saved as the following: `[file_prefix][product_id]_t[date].[tif/Rds]`
+* **file_skip_if_exists:** Whether the function should first check wither the file already exists, and to skip downloading or extracting data if the data for that date if the file already exists (default: `TRUE`). If the function is first run with `date = c(2018, 2019, 2020)`, then is later run with `date = c(2018, 2019, 2020, 2021)`, the function will only download/extract data for 2021. Skipping existing files can facilitate re-running the function at a later date to download only more recent data.
   
 * **...:** Additional arguments for [`raster::approxNA`](https://www.rdocumentation.org/packages/raster/versions/3.6-26/topics/approxNA), if `interpol_na = TRUE`
-
 
 ### Argument for `bm_extract` only <a name="args-extract">
 
@@ -315,6 +314,5 @@ If `output_location_type = "file"`, the following arguments can be used:
 For more information on NASA Black Marble, see:
 
 * [Academic paper](https://www.sciencedirect.com/science/article/pii/S003442571830110X)
-* [X Thread](https://twitter.com/yohaniddawela/status/1734542275630268811)
+* [Substack Post](https://yohaniddawela.substack.com/p/not-all-nightlight-datasets-are-the)
 * [Webinar](https://appliedsciences.nasa.gov/get-involved/training/english/arset-introduction-nasas-black-marble-night-lights-data)
-
