@@ -43,13 +43,6 @@ month_start_day_to_month <- function(x){
 
 month_start_day_to_month <- Vectorize(month_start_day_to_month)
 
-pad2 <- function(x){
-  if(nchar(x) == 1) out <- paste0("0", x)
-  if(nchar(x) == 2) out <- paste0(x)
-  return(out)
-}
-pad2 <- Vectorize(pad2)
-
 pad3 <- function(x){
   if(nchar(x) == 1) out <- paste0("00", x)
   if(nchar(x) == 2) out <- paste0("0", x)
@@ -145,7 +138,7 @@ remove_fill_value <- function(x, variable){
   )){
     x[][x[] == 65535] <- NA
   }
-
+  
   return(x)
 }
 
@@ -297,7 +290,7 @@ file_to_raster <- function(f,
   nCols      <- ncol(out)
   res        <- nRows
   nodata_val <- NA
-  myCrs      <- 4326
+  myCrs      <- "EPSG:4326"
   
   ## Make Raster
   
@@ -309,13 +302,9 @@ file_to_raster <- function(f,
   out[out == nodata_val] <- NA
   
   #turn the out object into a raster
-  outr <- raster(out,crs=myCrs)
-  
-  #create extents class
-  rasExt <- raster::extent(c(xMin,xMax,yMin,yMax))
-  
-  #assign the extents to the raster
-  extent(outr) <- rasExt
+  outr <- terra::rast(out,
+                      crs = myCrs,
+                      extent = c(xMin,xMax,yMin,yMax))
   
   #set fill values to NA
   outr <- remove_fill_value(outr, variable)
@@ -344,7 +333,7 @@ read_bm_csv <- function(year,
       df
     },
     error = function(e){
-      warning(paste0("Error with year: ", year, "; day: ", day))
+      #warning(paste0("Error with year: ", year, "; day: ", day))
       data.frame(NULL)
     }
   )
@@ -380,7 +369,7 @@ create_dataset_name_df <- function(product_id,
   }
   
   if(product_id == "VNP46A3"){
-    param_df <- cross_df(list(year            = 2012:year_end,
+    param_df <- cross_df(list(year = 2012:year_end,
                               day = c("001", "032", "061", "092", "122", "153", "183", "214", "245", "275", "306", "336",
                                       "060", "091", "121", "152", "182", "213", "244", "274", "305", "335")))
   }
@@ -420,10 +409,16 @@ create_dataset_name_df <- function(product_id,
   }
   
   #### Create data
-  files_df <- purrr::map2_dfr(param_df$year,
-                              param_df$day,
-                              read_bm_csv,
-                              product_id)
+  # files_df <- purrr::map2_dfr(param_df$year,
+  #                             param_df$day,
+  #                             read_bm_csv,
+  #                             product_id)
+  
+  files_df <- purrr::map2(param_df$year,
+                          param_df$day,
+                          read_bm_csv,
+                          product_id) %>%
+    bind_rows()
   
   return(files_df)
 }
@@ -433,6 +428,7 @@ download_raster <- function(file_name,
                             variable,
                             bearer,
                             quality_flag_rm,
+                            h5_dir,
                             quiet){
   
   year       <- file_name %>% substring(10,13)
@@ -443,21 +439,36 @@ download_raster <- function(file_name,
                 product_id, '/', year, '/', day, '/', file_name)
   
   headers <- c('Authorization' = paste('Bearer', bearer))
-  download_path <- file.path(temp_dir, file_name)
   
-  if(quiet == FALSE) message(paste0("Processing: ", file_name))
-  
-  response <- httr::GET(url, 
-                        add_headers(headers), 
-                        write_disk(download_path, overwrite = TRUE),
-                        progress())
-  
-  if(response$status_code != 200){
-    message("Error in downloading data")
-    message(response)
+  if(is.null(h5_dir)){
+    download_path <- file.path(temp_dir, file_name)
+  } else{
+    download_path <- file.path(h5_dir, file_name)
   }
   
-  r <- file_to_raster(file.path(temp_dir, file_name),
+  if(!file.exists(download_path)){
+    
+    if(quiet == FALSE) message(paste0("Processing: ", file_name))
+    
+    if(quiet == TRUE){
+      response <- httr::GET(url, 
+                            add_headers(headers), 
+                            write_disk(download_path, overwrite = TRUE))
+    } else{
+      response <- httr::GET(url, 
+                            add_headers(headers), 
+                            write_disk(download_path, overwrite = TRUE),
+                            progress())
+    }
+    
+    if(response$status_code != 200){
+      message("Error in downloading data")
+      message(response)
+    }
+    
+  }
+  
+  r <- file_to_raster(download_path,
                       variable,
                       quality_flag_rm)
   
@@ -515,7 +526,7 @@ count_n_obs <- function(values, coverage_fraction) {
 #' * `"VNP46A2"`: Daily (corrected)
 #' * `"VNP46A3"`: Monthly
 #' * `"VNP46A4"`: Annual
-#' @param date Date of raster data. Entering one date will produce a raster. Entering multiple dates will produce a raster stack.
+#' @param date Date of raster data. Entering one date will produce a `SpatRaster` object. Entering multiple dates will produce a `SpatRaster` object with multiple bands; one band per date.
 #' * For `product_id`s `"VNP46A1"` and `"VNP46A2"`, a date (eg, `"2021-10-03"`).
 #' * For `product_id` `"VNP46A3"`, a date or year-month (e.g., `"2021-10-01"`, where the day will be ignored, or `"2021-10"`).
 #' * For `product_id` `"VNP46A4"`, year or date  (e.g., `"2021-10-01"`, where the month and day will be ignored, or `2021`).
@@ -541,14 +552,16 @@ count_n_obs <- function(values, coverage_fraction) {
 #' - `1`: Poor-quality, The number of observations used for the composite is less than or equal to 3
 #' - `2`: Gap filled NTL based on historical data
 #' @param check_all_tiles_exist Check whether all Black Marble nighttime light tiles exist for the region of interest. Sometimes not all tiles are available, so the full region of interest may not be covered. If `TRUE`, skips cases where not all tiles are available. (Default: `TRUE`).
-#' @param interpol_na When data for more than one date is downloaded, whether to interpolate `NA` values in rasters using the `raster::approxNA` function. Additional arguments for the `raster::approxNA` function can also be passed into `bm_extract` (eg, `method`, `rule`, `f`, `ties`, `z`, `NA_rule`). (Default: `FALSE`).
+#' @param interpol_na When data for more than one date is downloaded, whether to interpolate `NA` values in rasters using the `terra::approximate` function. Additional arguments for the `terra::approximate` function can also be passed into `bm_extract` (eg, `method`, `rule`, `f`, `ties`, `z`, `NA_rule`). (Default: `FALSE`).
 #' @param output_location_type Where to produce output; either `memory` or `file`. If `memory`, functions returns a dataframe in R. If `file`, function exports a `.csv` file and returns `NULL`.
 #' @param file_dir (If `output_location_type = file`). The directory where data should be exported (default: `NULL`, so the working directory will be used)
 #' @param file_prefix (If `output_location_type = file`). Prefix to add to the file to be saved. The file will be saved as the following: `[file_prefix][product_id]_t[date].csv`
 #' @param file_skip_if_exists (If `output_location_type = file`). Whether the function should first check wither the file already exists, and to skip downloading or extracting data if the data for that date if the file already exists (default: `TRUE`).
+#' @param file_return_null Whether to return `NULL` instead of a `dataframe`. When `output_location_type = 'file'`, the function will export data to the `file_dir` directory. When `file_return_null = FALSE`, the function will also return a `dataframe` of the queried data---so the data is available in R memory. Setting `file_return_null = TRUE`, data will be saved to `file_dir` but no data will be returned by the function to R memory (default: `FALSE`).
+#' @param h5_dir Black Marble data are originally downloaded as `h5` files. If `h5_dir = NULL`, the function downloads to a temporary directory then deletes the directory. If `h5_dir` is set to a path, `h5` files are saved to that directory and not deleted. The function will then check if the needed `h5` file already exists in the directory; if it exists, the function will not re-download the `h5` file.
 #' @param quiet Suppress output that show downloading progress and other messages. (Default: `FALSE`).
 #'
-#' @param ... Additional arguments for `raster::approxNA`, if `interpol_na = TRUE`
+#' @param ... Additional arguments for `terra::approximate`, if `interpol_na = TRUE`
 #'
 #' @return Raster
 #'
@@ -595,6 +608,8 @@ bm_extract <- function(roi_sf,
                        file_dir = NULL,
                        file_prefix = NULL,
                        file_skip_if_exists = TRUE,
+                       file_return_null = FALSE,
+                       h5_dir = NULL,
                        quiet = FALSE,
                        ...){
   
@@ -606,6 +621,11 @@ bm_extract <- function(roi_sf,
   if( (interpol_na == T) & (output_location_type == "file") ){
     interpol_na <- F
     warning("interpol_na ignored. Interpolation only occurs when output_location_type = 'memory'")
+  }
+  
+  if(class(roi_sf)[1] == "SpatVector") roi_sf <- roi_sf %>% st_as_sf()
+  if(!("sf" %in% class(roi_sf))){
+    stop("roi must be an sf object")
   }
   
   # Assign interpolation variables ---------------------------------------------
@@ -630,6 +650,17 @@ bm_extract <- function(roi_sf,
   # NTL Variable ---------------------------------------------------------------
   variable <- define_variable(variable, product_id)
   
+  # Filename root --------------------------------------------------------------
+  # Define outside of lapply, as use this later to aggregate rasters
+  if(output_location_type == "file"){
+    out_name_begin <- paste0(file_prefix, 
+                             product_id, "_", 
+                             variable, "_",
+                             "qflag", 
+                             quality_flag_rm %>% paste0(collapse="_"), "_",
+                             aggregation_fun %>% paste0(collapse="_"))
+  }
+  
   if(interpol_na == T){
     
     #### Create raster
@@ -641,29 +672,30 @@ bm_extract <- function(roi_sf,
                       quality_flag_rm = quality_flag_rm,
                       check_all_tiles_exist = check_all_tiles_exist,
                       interpol_na = F,
+                      h5_dir = h5_dir,
                       quiet = quiet,
                       temp_dir = temp_dir)
     
-    bm_r <- raster::approxNA(bm_r,
-                             method = method,
-                             rule   = rule,
-                             f      = f,
-                             ties   = ties,
-                             z      = z,
-                             NArule = NArule)
+    bm_r <- terra::approximate(bm_r,
+                               method = method,
+                               rule   = rule,
+                               f      = f,
+                               ties   = ties,
+                               z      = z,
+                               NArule = NArule)
     
     #### Extract
     roi_df <- roi_sf %>% st_drop_geometry()
     roi_df$date <- NULL
     
-    n_obs_df <- exact_extract(bm_r, roi_sf, count_n_obs) %>%
+    n_obs_df <- exact_extract(bm_r, roi_sf, count_n_obs, progress = !quiet) %>%
       bind_cols(roi_df) %>%
       tidyr::pivot_longer(cols = -c(names(roi_df)),
                           names_to = c(".value", "date"),
                           names_sep = "\\.t") %>%
       dplyr::mutate(prop_non_na_pixels = .data$n_non_na_pixels / .data$n_pixels)
     
-    ntl_df <- exact_extract(bm_r, roi_sf, aggregation_fun) %>%
+    ntl_df <- exact_extract(bm_r, roi_sf, aggregation_fun, progress = !quiet) %>%
       tidyr::pivot_longer(cols = everything(),
                           names_to = c(".value", "date"),
                           names_sep = "\\.t")
@@ -673,8 +705,6 @@ bm_extract <- function(roi_sf,
     
     ntl_df$date <- NULL
     r <- bind_cols(n_obs_df, ntl_df)
-    #r <- ntl_df %>%
-    #  left_join(n_obs_df, by = "date")
     
     # Apply through each date, extract, then append
   } else{
@@ -691,7 +721,8 @@ bm_extract <- function(roi_sf,
           #### If save to file
           if(output_location_type == "file"){
             
-            out_name <- paste0(file_prefix, product_id, "_", date_name_i, ".Rds")
+            out_name_end <- paste0("_", date_name_i, ".Rds")
+            out_name <- paste0(out_name_begin, out_name_end)
             out_path <- file.path(file_dir, out_name)
             
             make_raster <- TRUE
@@ -707,12 +738,14 @@ bm_extract <- function(roi_sf,
                                variable = variable,
                                quality_flag_rm = quality_flag_rm,
                                check_all_tiles_exist = check_all_tiles_exist,
+                               h5_dir = h5_dir,
                                quiet = quiet,
                                temp_dir = temp_dir)
               names(r) <- date_name_i
               
               #### Extract
-              r_agg <- exact_extract(x = r, y = roi_sf, fun = aggregation_fun)
+              r_agg <- exact_extract(x = r, y = roi_sf, fun = aggregation_fun, 
+                                     progress = !quiet)
               roi_df <- roi_sf
               roi_df$geometry <- NULL
               
@@ -726,11 +759,13 @@ bm_extract <- function(roi_sf,
               
               if(add_n_pixels){
                 
-                r_n_obs <- exact_extract(r_out, roi_sf, function(values, coverage_fraction)
-                  sum(!is.na(values)))
+                r_n_obs <- exact_extract(r, roi_sf, function(values, coverage_fraction)
+                  sum(!is.na(values)),
+                  progress = !quiet)
                 
-                r_n_obs_poss <- exact_extract(r_out, roi_sf, function(values, coverage_fraction)
-                  length(values))
+                r_n_obs_poss <- exact_extract(r, roi_sf, function(values, coverage_fraction)
+                  length(values),
+                  progress = !quiet)
                 
                 r_agg$n_pixels           <- r_n_obs_poss
                 r_agg$n_non_na_pixels    <- r_n_obs
@@ -756,6 +791,7 @@ bm_extract <- function(roi_sf,
                                  variable = variable,
                                  quality_flag_rm = quality_flag_rm,
                                  check_all_tiles_exist = check_all_tiles_exist,
+                                 h5_dir = h5_dir,
                                  quiet = quiet,
                                  temp_dir = temp_dir)
             names(r_out) <- date_name_i
@@ -763,17 +799,20 @@ bm_extract <- function(roi_sf,
             if(add_n_pixels){
               
               r_n_obs <- exact_extract(r_out, roi_sf, function(values, coverage_fraction)
-                sum(!is.na(values)))
+                sum(!is.na(values)),
+                progress = !quiet)
               
               r_n_obs_poss <- exact_extract(r_out, roi_sf, function(values, coverage_fraction)
-                length(values))
+                length(values),
+                progress = !quiet)
               
               roi_sf$n_pixels           <- r_n_obs_poss
               roi_sf$n_non_na_pixels    <- r_n_obs
               roi_sf$prop_non_na_pixels <- roi_sf$n_non_na_pixels / roi_sf$n_pixels 
             }
             
-            r_out <- exact_extract(x = r_out, y = roi_sf, fun = aggregation_fun)
+            r_out <- exact_extract(x = r_out, y = roi_sf, fun = aggregation_fun,
+                                   progress = !quiet)
             
             roi_df <- roi_sf
             roi_df$geometry <- NULL
@@ -809,6 +848,19 @@ bm_extract <- function(roi_sf,
     
   }
   
+  # Output dataframe when output_location_type = "file" ------------------------
+  if(output_location_type == "file"){
+    if(!file_return_null){
+      r <- file_dir %>%
+        list.files(full.names = T,
+                   pattern = paste0("*.Rds")) %>%
+        str_subset(out_name_begin) %>%
+        map_df(readRDS)
+    } else{
+      r <- NULL
+    }
+  }
+  
   unlink(temp_dir, recursive = T)
   return(r)
 }
@@ -823,7 +875,7 @@ bm_extract <- function(roi_sf,
 #' * `"VNP46A2"`: Daily (corrected)
 #' * `"VNP46A3"`: Monthly
 #' * `"VNP46A4"`: Annual
-#' @param date Date of raster data. Entering one date will produce a raster. Entering multiple dates will produce a raster stack.
+#' @param date Date of raster data. Entering one date will produce a `SpatRaster` object. Entering multiple dates will produce a `SpatRaster` object with multiple bands; one band per date.
 #' * For `product_id`s `"VNP46A1"` and `"VNP46A2"`, a date (eg, `"2021-10-03"`).
 #' * For `product_id` `"VNP46A3"`, a date or year-month (e.g., `"2021-10-01"`, where the day will be ignored, or `"2021-10"`).
 #' * For `product_id` `"VNP46A4"`, year or date  (e.g., `"2021-10-01"`, where the month and day will be ignored, or `2021`).
@@ -847,14 +899,16 @@ bm_extract <- function(roi_sf,
 #' - `1`: Poor-quality, The number of observations used for the composite is less than or equal to 3
 #' - `2`: Gap filled NTL based on historical data
 #' @param check_all_tiles_exist Check whether all Black Marble nighttime light tiles exist for the region of interest. Sometimes not all tiles are available, so the full region of interest may not be covered. If `TRUE`, skips cases where not all tiles are available. (Default: `TRUE`).
-#' @param interpol_na When data for more than one date is downloaded, whether to interpolate `NA` values using the `raster::approxNA` function. Additional arguments for the `raster::approxNA` function can also be passed into `bm_raster` (eg, `method`, `rule`, `f`, `ties`, `z`, `NA_rule`). (Default: `FALSE`).
+#' @param interpol_na When data for more than one date is downloaded, whether to interpolate `NA` values using the `terra::approximate` function. Additional arguments for the `terra::approximate` function can also be passed into `bm_raster` (eg, `method`, `rule`, `f`, `ties`, `z`, `NA_rule`). (Default: `FALSE`).
 #' @param output_location_type Where to produce output; either `memory` or `file`. If `memory`, functions returns a raster in R. If `file`, function exports a `.tif` file and returns `NULL`.
 #' For `output_location_type = file`:
 #' @param file_dir The directory where data should be exported (default: `NULL`, so the working directory will be used)
 #' @param file_prefix Prefix to add to the file to be saved. The file will be saved as the following: `[file_prefix][product_id]_t[date].tif`
 #' @param file_skip_if_exists Whether the function should first check wither the file already exists, and to skip downloading or extracting data if the data for that date if the file already exists (default: `TRUE`).
+#' @param file_return_null Whether to return `NULL` instead of a `SpatRaster`. When `output_location_type = 'file'`, the function will export data to the `file_dir` directory. When `file_return_null = FALSE`, the function will also return a `SpatRaster` of the queried data---so the data is available in R memory. Setting `file_return_null = TRUE`, data will be saved to `file_dir` but no data will be returned by the function to R memory (default: `FALSE`).
+#' @param h5_dir Black Marble data are originally downloaded as `h5` files. If `h5_dir = NULL`, the function downloads to a temporary directory then deletes the directory. If `h5_dir` is set to a path, `h5` files are saved to that directory and not deleted. The function will then check if the needed `h5` file already exists in the directory; if it exists, the function will not re-download the `h5` file.
 #' @param quiet Suppress output that show downloading progress and other messages. (Default: `FALSE`).
-#' @param ... Additional arguments for `raster::approxNA`, if `interpol_na = TRUE`
+#' @param ... Additional arguments for `terra::approximate`, if `interpol_na = TRUE`
 #'
 #' @return Raster
 #'
@@ -898,7 +952,7 @@ bm_extract <- function(roi_sf,
 #' @import lubridate
 #' @rawNamespace import(tidyr, except = c(extract))
 #' @rawNamespace import(purrr, except = c(flatten_df, values))
-#' @rawNamespace import(raster, except = c(union, select, intersect, origin, tail, head, values))
+#' @rawNamespace import(terra, except = c(intersect, values, origin, union))
 #' 
 # @rawNamespace import(utils, except = c(stack, unstack))
 bm_raster <- function(roi_sf,
@@ -913,6 +967,8 @@ bm_raster <- function(roi_sf,
                       file_dir = NULL,
                       file_prefix = NULL,
                       file_skip_if_exists = TRUE,
+                      file_return_null = FALSE,
+                      h5_dir = NULL,
                       quiet = FALSE,
                       ...){
   
@@ -924,6 +980,11 @@ bm_raster <- function(roi_sf,
   if( (interpol_na == T) & (output_location_type == "file") ){
     interpol_na <- F
     stop("interpol_na ignored. Interpolation only occurs when output_location_type = 'memory'")
+  }
+  
+  if(class(roi_sf)[1] == "SpatVector") roi_sf <- roi_sf %>% st_as_sf()
+  if(!("sf" %in% class(roi_sf))){
+    stop("roi must be an sf object")
   }
   
   # Assign interpolation variables ---------------------------------------------
@@ -948,6 +1009,16 @@ bm_raster <- function(roi_sf,
   # NTL Variable ---------------------------------------------------------------
   variable <- define_variable(variable, product_id)
   
+  # Filename root --------------------------------------------------------------
+  # Define outside of lapply, as use this later to aggregate rasters
+  if(output_location_type == "file"){
+    out_name_begin <- paste0(file_prefix, 
+                             product_id, "_", 
+                             variable, "_",
+                             "qflag", 
+                             quality_flag_rm %>% paste0(collapse="_"))
+  }
+  
   # Download data --------------------------------------------------------------
   r_list <- lapply(date, function(date_i){
     
@@ -959,7 +1030,13 @@ bm_raster <- function(roi_sf,
         
         #### If save as tif format
         if(output_location_type == "file"){
-          out_name <- paste0(file_prefix, product_id, "_", date_name_i, ".tif")
+          
+          ## Output path
+          out_name_end <- paste0("_",
+                                 date_name_i,
+                                 ".tif")
+          out_name <- paste0(out_name_begin, out_name_end)
+          
           out_path <- file.path(file_dir, out_name)
           
           make_raster <- TRUE
@@ -974,6 +1051,7 @@ bm_raster <- function(roi_sf,
                              variable = variable,
                              quality_flag_rm = quality_flag_rm,
                              check_all_tiles_exist = check_all_tiles_exist,
+                             h5_dir = h5_dir,
                              quiet = quiet,
                              temp_dir = temp_dir)
             names(r) <- date_name_i
@@ -981,7 +1059,7 @@ bm_raster <- function(roi_sf,
             writeRaster(r, out_path)
             
           } else{
-            warning(paste0('"', out_path, '" already exists; skipping.\n'))
+            message(paste0('"', out_path, '" already exists; skipping.\n'))
           }
           
           r_out <- NULL # Saving as tif file, so output from function should be NULL
@@ -994,6 +1072,7 @@ bm_raster <- function(roi_sf,
                                variable = variable,
                                quality_flag_rm = quality_flag_rm,
                                check_all_tiles_exist = check_all_tiles_exist,
+                               h5_dir = h5_dir,
                                quiet = quiet,
                                temp_dir = temp_dir)
           names(r_out) <- date_name_i
@@ -1017,23 +1096,36 @@ bm_raster <- function(roi_sf,
   if(length(r_list) == 1){
     r <- r_list[[1]]
   } else if (length(r_list) > 1){
-    r <- raster::stack(r_list)
+    r <- terra::rast(r_list)
   } else{
     r <- NULL
   }
   
   # Interpolate ----------------------------------------------------------------
   if(interpol_na %in% T){
-    r <- raster::approxNA(r,
-                          method = method,
-                          rule   = rule,
-                          f      = f,
-                          ties   = ties,
-                          z      = z,
-                          NArule = NArule)
+    r <- terra::approximate(r,
+                            method = method,
+                            rule   = rule,
+                            f      = f,
+                            ties   = ties,
+                            z      = z,
+                            NArule = NArule)
   }
   
   unlink(temp_dir, recursive = T)
+  
+  # Output raster when output_location_type = "file" ---------------------------
+  if(output_location_type == "file"){
+    if(!file_return_null){
+      r <- file_dir %>%
+        list.files(full.names = T,
+                   pattern = paste0("*.tif")) %>%
+        str_subset(out_name_begin) %>%
+        rast()
+    } else{
+      r <- NULL
+    }
+  }
   
   return(r)
 }
@@ -1045,13 +1137,9 @@ bm_raster_i <- function(roi_sf,
                         variable,
                         quality_flag_rm,
                         check_all_tiles_exist,
+                        h5_dir,
                         quiet,
                         temp_dir){
-  
-  # Checks ---------------------------------------------------------------------
-  if(!("sf" %in% class(roi_sf))){
-    stop("roi must be an sf object")
-  }
   
   # Black marble grid ----------------------------------------------------------
   bm_tiles_sf <- read_sf("https://raw.githubusercontent.com/worldbank/blackmarbler/main/data/blackmarbletiles.geojson")
@@ -1076,9 +1164,6 @@ bm_raster_i <- function(roi_sf,
   }
   
   # Grab tile dataframe --------------------------------------------------------
-  #product_id <- "VNP46A4"
-  #date <- "2021-10-15"
-  
   year  <- date %>% year()
   month <- date %>% month()
   day   <- date %>% yday()
@@ -1094,10 +1179,6 @@ bm_raster_i <- function(roi_sf,
   bm_tiles_sf <- bm_tiles_sf[!(bm_tiles_sf$TileID %>% str_detect("h00")),]
   bm_tiles_sf <- bm_tiles_sf[!(bm_tiles_sf$TileID %>% str_detect("v00")),]
   
-  #inter <- st_intersects(bm_tiles_sf, roi_1row_sf, sparse = F) %>% as.vector()
-  # inter <- st_intersects(bm_tiles_sf, roi_sf, sparse = F) %>%
-  #   apply(1, sum)
-  
   inter <- tryCatch(
     {
       inter <- st_intersects(bm_tiles_sf, roi_sf, sparse = F) %>%
@@ -1108,11 +1189,10 @@ bm_raster_i <- function(roi_sf,
     error = function(e){
       warning("Issue with `roi_sf` intersecting with blackmarble tiles; try buffering by a width of 0: eg, st_buffer(roi_sf, 0)")
       stop("Issue with `roi_sf` intersecting with blackmarble tiles; try buffering by a width of 0: eg, st_buffer(roi_sf, 0)")
-      #stop(st_intersects(bm_tiles_sf, roi_sf, sparse = F))
     }
   )
   
-  grid_use_sf <- bm_tiles_sf[inter>0,]
+  grid_use_sf <- bm_tiles_sf[inter > 0,]
   
   # Make Raster ----------------------------------------------------------------
   tile_ids_rx <- grid_use_sf$TileID %>% paste(collapse = "|")
@@ -1130,23 +1210,18 @@ bm_raster_i <- function(roi_sf,
   }
   
   r_list <- lapply(bm_files_df$name, function(name_i){
-    download_raster(name_i, temp_dir, variable, bearer, quality_flag_rm, quiet)
+    download_raster(name_i, temp_dir, variable, bearer, quality_flag_rm, h5_dir, quiet)
   })
   
   if(length(r_list) == 1){
     r <- r_list[[1]]
   } else{
     
-    ## Mosaic rasters together
-    names(r_list)    <- NULL
-    r_list$fun       <- max
-    
-    r <- do.call(raster::mosaic, r_list)
-    
+    r <- do.call(terra::mosaic, c(r_list, fun = "max"))
   }
   
   ## Crop
-  r <- r %>% crop(roi_sf)
+  r <- r %>% terra::crop(roi_sf)
   
   unlink(file.path(temp_dir, product_id), recursive = T)
   

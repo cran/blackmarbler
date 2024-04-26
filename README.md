@@ -7,7 +7,7 @@
 ![downloads](http://cranlogs.r-pkg.org/badges/grand-total/blackmarbler)
 [![GitHub Repo stars](https://img.shields.io/github/stars/worldbank/blackmarbler)](https://github.com/worldbank/blackmarbler)
 [![activity](https://img.shields.io/github/commit-activity/m/worldbank/blackmarbler)](https://github.com/worldbank/blackmarbler/graphs/commit-activity)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/license/mit/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/license/mit)
 
 <!-- badges: end -->
 
@@ -18,7 +18,7 @@
 * [Usage](#usage)
   * [Setup](#setup)
   * [Make raster](#raster)
-  * [Make raster stack across multiple time periods](#stack)
+  * [Make raster across multiple time periods](#stack)
   * [Make map](#map)
   * [Make figure of trends in nighttime lights](#trends)
   * [Workflow to update data](#update-data)
@@ -71,8 +71,10 @@ Before downloading and extracting Black Marble data, we first load packages, def
 library(blackmarbler)
 library(geodata)
 library(sf)
-library(raster)
+library(terra)
 library(ggplot2)
+library(tidyterra)
+library(lubridate)
 
 #### Define NASA bearer token
 bearer <- "BEARER-TOKEN-HERE"
@@ -81,7 +83,7 @@ bearer <- "BEARER-TOKEN-HERE"
 # Define region of interest (roi). The roi must be (1) an sf polygon and (2)
 # in the WGS84 (epsg:4326) coordinate reference system. Here, we use the
 # getData function to load a polygon of Ghana
-roi_sf <- gadm(country = "GHA", level=1, path = tempdir()) |> st_as_sf()
+roi_sf <- gadm(country = "GHA", level=1, path = tempdir()) 
 ```
 
 ### Make raster of nighttime lights <a name="raster">
@@ -109,14 +111,14 @@ r_2021 <- bm_raster(roi_sf = roi_sf,
                     bearer = bearer)
 ```
 
-### Make raster stack of nighttime lights across multiple time periods <a name="stack">
+### Make raster of nighttime lights across multiple time periods <a name="stack">
 
-To extract data for multiple time periods, add multiple time periods to `date`. The function will return a raster stack, where each raster band corresponds to a different date. The below code provides examples getting data across multiple days, months, and years.
+To extract data for multiple time periods, add multiple time periods to `date`. The function will return a `SpatRaster` object with multiple bands, where each band corresponds to a different date. The below code provides examples getting data across multiple days, months, and years.
 
 ```r
 #### Daily data in March 2021
 r_daily <- bm_raster(roi_sf = roi_sf,
-                     product_id = "VNP46A3",
+                     product_id = "VNP46A2",
                      date = seq.Date(from = ymd("2021-03-01"), to = ymd("2021-03-31"), by = "day"),
                      bearer = bearer)
 
@@ -145,28 +147,21 @@ r <- bm_raster(roi_sf = roi_sf,
                bearer = bearer)
 
 #### Prep data
-r <- r |> mask(roi_sf)
-
-r_df <- rasterToPoints(r, spatial = TRUE) |> as.data.frame()
-names(r_df) <- c("value", "x", "y")
-
-## Remove very low values of NTL; can be considered noise
-r_df$value[r_df$value <= 2] <- 0
+r <- r |> terra::mask(roi_sf)
 
 ## Distribution is skewed, so log
-r_df$value_adj <- log(r_df$value+1)
+r[] <- log(r[] + 1)
 
 ##### Map
-p <- ggplot() +
-  geom_raster(data = r_df,
-  aes(x = x, y = y,
-  fill = value_adj)) +
+ggplot() +
+  geom_spatraster(data = r) +
   scale_fill_gradient2(low = "black",
                        mid = "yellow",
                        high = "red",
-                       midpoint = 4.5) +
+                       midpoint = 4.5,
+                       na.value = "transparent") +
   labs(title = "Nighttime Lights: October 2021") +
-  coord_quickmap() +
+  coord_sf() +
   theme_void() +
   theme(plot.title = element_text(face = "bold", hjust = 0.5),
   legend.position = "none")
@@ -260,7 +255,7 @@ Both functions take the following arguments:
   * `"VNP46A3"`: Monthly
   * `"VNP46A4"`: Annual
 
-* **date:**  Date of raster data. Entering one date will produce a raster. Entering multiple dates will produce a raster stack.
+* **date:**  Date of raster data. Entering one date will produce a `SpatRaster` object. Entering multiple dates will produce a `SpatRaster` object with multiple bands; one band per date.
 
   * For `product_id`s `"VNP46A1"` and `"VNP46A2"`, a date (eg, `"2021-10-03"`).
   * For `product_id` `"VNP46A3"`, a date or year-month (e.g., `"2021-10-01"`, where the day will be ignored, or `"2021-10"`).
@@ -289,7 +284,9 @@ Both functions take the following arguments:
     * `2`: Gap filled NTL based on historical data
 
 * **check_all_tiles_exist:** Check whether all Black Marble nighttime light tiles exist for the region of interest. Sometimes not all tiles are available, so the full region of interest may not be covered. If `TRUE`, skips cases where not all tiles are available. (Default: `TRUE`).
-* **interpol_na:** When data for more than one date is downloaded, whether to interpolate `NA` values in rasters using the [`raster::approxNA`](https://www.rdocumentation.org/packages/raster/versions/3.6-26/topics/approxNA) function. Additional arguments for the [`raster::approxNA`](https://www.rdocumentation.org/packages/raster/versions/3.6-26/topics/approxNA) function can also be passed into `bm_raster`/`bm_extract` (eg, `method`, `rule`, `f`, `ties`, `z`, `NA_rule`). (Default: `FALSE`).
+* **interpol_na:** When data for more than one date is downloaded, whether to interpolate `NA` values in rasters using the [`terra::approximate`](https://www.rdocumentation.org/packages/raster/versions/3.6-26/topics/approxNA) function. Additional arguments for the [`terra::approximate`](https://www.rdocumentation.org/packages/raster/versions/3.6-26/topics/approxNA) function can also be passed into `bm_raster`/`bm_extract` (eg, `method`, `rule`, `f`, `ties`, `z`, `NA_rule`). (Default: `FALSE`).
+* **h5_dir:** Black Marble data are originally downloaded as `h5` files. If `h5_dir = NULL`, the function downloads to a temporary directory then deletes the directory. If `h5_dir` is set to a path, `h5` files are saved to that directory and not deleted. The function will then check if the needed `h5` file already exists in the directory; if it exists, the function will not re-download the `h5` file.
+
 
 * **output_location_type:** Where output should be stored (default: `r_memory`). Either:
 
@@ -301,8 +298,10 @@ If `output_location_type = "file"`, the following arguments can be used:
 * **file_dir:** The directory where data should be exported (default: `NULL`, so the working directory will be used)
 * **file_prefix:** Prefix to add to the file to be saved. The file will be saved as the following: `[file_prefix][product_id]_t[date].[tif/Rds]`
 * **file_skip_if_exists:** Whether the function should first check wither the file already exists, and to skip downloading or extracting data if the data for that date if the file already exists (default: `TRUE`). If the function is first run with `date = c(2018, 2019, 2020)`, then is later run with `date = c(2018, 2019, 2020, 2021)`, the function will only download/extract data for 2021. Skipping existing files can facilitate re-running the function at a later date to download only more recent data.
+* **file_return_null:** Whether to return `NULL` instead of a output to R (`SpatRaster` or `dataframe`). When `output_location_type = 'file'`, the function will export data to the `file_dir` directory. When `file_return_null = FALSE`, the function will also return the queried data---so the data is available in R memory. Setting `file_return_null = TRUE`, data will be saved to `file_dir` but no data will be returned by the function to R memory (default: `FALSE`).
+
   
-* **...:** Additional arguments for [`raster::approxNA`](https://www.rdocumentation.org/packages/raster/versions/3.6-26/topics/approxNA), if `interpol_na = TRUE`
+* **...:** Additional arguments for [`terra::approximate`](https://rspatial.github.io/terra/reference/approximate.html), if `interpol_na = TRUE`
 
 ### Argument for `bm_extract` only <a name="args-extract">
 
