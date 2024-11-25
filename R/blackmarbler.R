@@ -182,7 +182,7 @@ apply_scaling_factor <- function(x, variable){
   return(x)
 }
 
-file_to_raster <- function(f,
+file_to_raster <- function(h5_file,
                            variable,
                            quality_flag_rm){
   # Converts h5 file to raster.
@@ -190,12 +190,12 @@ file_to_raster <- function(f,
   # --f: Filepath to h5 file
   
   ## Data
-  h5_data <- h5file(f, "r+")
+  h5_data <- h5file(h5_file, "r+")
   
   #### Daily
-  if(f %>% str_detect("VNP46A1|VNP46A2")){
+  if(h5_file %>% str_detect("VNP46A1|VNP46A2")){
     
-    tile_i <- f %>% str_extract("h\\d{2}v\\d{2}")
+    tile_i <- h5_file %>% stringr::str_extract("h\\d{2}v\\d{2}")
     
     bm_tiles_sf <- read_sf("https://raw.githubusercontent.com/worldbank/blackmarbler/main/data/blackmarbletiles.geojson")
     grid_i_sf <- bm_tiles_sf[bm_tiles_sf$TileID %in% tile_i,]
@@ -218,23 +218,22 @@ file_to_raster <- function(f,
     }
     
     out <- h5_data[[paste0("HDFEOS/GRIDS/VNP_Grid_DNB/Data Fields/", variable)]][,]
-    qf  <- h5_data[["HDFEOS/GRIDS/VNP_Grid_DNB/Data Fields/Mandatory_Quality_Flag"]][,]
     
-    if(length(quality_flag_rm) > 0){
-      if(variable %in% c("DNB_BRDF-Corrected_NTL",
-                         "Gap_Filled_DNB_BRDF-Corrected_NTL",
-                         "Latest_High_Quality_Retrieval")){
-        
-        for(val in quality_flag_rm){ # out[qf %in% quality_flag_rm] doesn't work, so loop
-          out[qf == val] <- NA
+    # VNP46A1 does not have Mandatory_Quality_Flag
+    if(h5_file %>% str_detect("VNP46A2")){
+      qf  <- h5_data[["HDFEOS/GRIDS/VNP_Grid_DNB/Data Fields/Mandatory_Quality_Flag"]][,]
+      
+      if(length(quality_flag_rm) > 0){
+        if(variable %in% c("DNB_BRDF-Corrected_NTL",
+                           "Gap_Filled_DNB_BRDF-Corrected_NTL",
+                           "Latest_High_Quality_Retrieval")){
+          
+          for(val in quality_flag_rm){ # out[qf %in% quality_flag_rm] doesn't work, so loop
+            out[qf == val] <- NA
+          }
         }
       }
     }
-    
-    # # Above doesn't fully capture
-    # if(variable %in% "Latest_High_Quality_Retrieval"){
-    #   out[out == 255] <- NA
-    # }
     
     #### Monthly/Annually
   } else{
@@ -289,7 +288,7 @@ file_to_raster <- function(f,
   nRows      <- nrow(out)
   nCols      <- ncol(out)
   res        <- nRows
-  nodata_val <- NA
+  #nodata_val <- NA
   myCrs      <- "EPSG:4326"
   
   ## Make Raster
@@ -299,7 +298,7 @@ file_to_raster <- function(f,
   out <- t(out)
   
   #assign data ignore values to NA
-  out[out == nodata_val] <- NA
+  #out[out == nodata_val] <- NA
   
   #turn the out object into a raster
   outr <- terra::rast(out,
@@ -322,25 +321,20 @@ read_bm_csv <- function(year,
                         day,
                         product_id){
   
-  df_out <- tryCatch(
-    {
-      df <- readr::read_csv(paste0("https://ladsweb.modaps.eosdis.nasa.gov/archive/allData/5000/",product_id,"/",year,"/",day,".csv"),
-                            show_col_types = F)
-      
-      df$year <- year
-      df$day <- day
-      
-      df
-    },
-    error = function(e){
-      #warning(paste0("Error with year: ", year, "; day: ", day))
-      data.frame(NULL)
-    }
-  )
+  
+  
+  df <- readr::read_csv(paste0("https://ladsweb.modaps.eosdis.nasa.gov/archive/allData/5000/",product_id,"/",year,"/",day,".csv"),
+                        show_col_types = F)
+  
+  
+  df$year <- year
+  df$day <- day
+  
+  df
   
   Sys.sleep(0.1)
   
-  return(df_out)
+  return(df)
 }
 
 create_dataset_name_df <- function(product_id,
@@ -364,19 +358,21 @@ create_dataset_name_df <- function(product_id,
   
   #### Make parameter dataframe
   if(product_id %in% c("VNP46A1", "VNP46A2")){
-    param_df <- cross_df(list(year = 2012:year_end,
-                              day  = pad3(1:366)))
+    param_df <- tidyr::expand_grid(year = 2012:year_end,
+                                   day  = pad3(1:366))
+    
   }
   
   if(product_id == "VNP46A3"){
-    param_df <- cross_df(list(year = 2012:year_end,
-                              day = c("001", "032", "061", "092", "122", "153", "183", "214", "245", "275", "306", "336",
-                                      "060", "091", "121", "152", "182", "213", "244", "274", "305", "335")))
+    param_df <- tidyr::expand_grid(year = 2012:year_end,
+                                   day = c("001", "032", "061", "092", "122", "153", "183", "214", "245", "275", "306", "336",
+                                           "060", "091", "121", "152", "182", "213", "244", "274", "305", "335"))
   }
   
   if(product_id == "VNP46A4"){
-    param_df <- cross_df(list(year = 2012:year_end,
-                              day  = "001"))
+    param_df <- tidyr::expand_grid(year = 2012:year_end,
+                                   day  = "001")
+    
   }
   
   #### Add month if daily or monthly data
@@ -420,6 +416,7 @@ create_dataset_name_df <- function(product_id,
                           product_id) %>%
     bind_rows()
   
+  
   return(files_df)
 }
 
@@ -451,20 +448,29 @@ download_raster <- function(file_name,
     if(quiet == FALSE) message(paste0("Processing: ", file_name))
     
     if(quiet == TRUE){
+      
       response <- httr::GET(url, 
-                            add_headers(headers), 
-                            write_disk(download_path, overwrite = TRUE))
+                            httr::timeout(60),
+                            httr::add_headers(headers), 
+                            httr::write_disk(download_path, overwrite = TRUE))
+      
     } else{
       response <- httr::GET(url, 
-                            add_headers(headers), 
-                            write_disk(download_path, overwrite = TRUE),
-                            progress())
+                            httr::timeout(60),
+                            httr::add_headers(headers), 
+                            httr::write_disk(download_path, overwrite = TRUE),
+                            httr::progress())
+      
     }
     
     if(response$status_code != 200){
       message("Error in downloading data")
       message(response)
     }
+    
+    #if(response$all_headers[[1]]$status != 200){
+    #  message("**Error in downloading data; bearer token likely invalid.** Try regenerating the bearer token; please see this link for instructions to obtain a bearer token: https://github.com/worldbank/blackmarbler?tab=readme-ov-file#bearer-token-")
+    #}
     
   }
   
@@ -504,7 +510,6 @@ define_date_name <- function(date_i, product_id){
   return(date_name_i)
 }
 
-
 count_n_obs <- function(values, coverage_fraction) {
   ## Function to count observations, for exact_extract
   
@@ -514,6 +519,42 @@ count_n_obs <- function(values, coverage_fraction) {
     dplyr::mutate(across(orig_vars, ~ as.numeric(!is.na(.)) )) %>%
     dplyr::summarise(across(orig_vars, sum, .names = "n_non_na_pixels.{.col}"),
                      across(orig_vars, ~length(.), .names = "n_pixels.{.col}"))
+}
+
+#' @title Get a NASA Earthdata bearer token
+#' @description Fetch a NASA Earthdata bearer token from using the Earthdata API.
+#' If none exist, this will create one, or if one already exists it will fetch
+#' that one instead.
+#'
+#' @param username character. NASA Earthdata username
+#' @param password character. NASA Earthdata password
+#'
+#' @return character
+#' @author Simon E. H. Smart <simon.smart@@cantab.net>
+#' @export
+get_nasa_token <- function(username, password) {
+  
+  stopifnot("username must be a character string" = inherits(username, "character"))
+  stopifnot("password must be a character string" = inherits(password, "character"))
+  
+  token_url <- "https://urs.earthdata.nasa.gov/api/users/find_or_create_token"
+  req <- httr2::request(token_url)
+  
+  response <- tryCatch(
+    req %>%
+      httr2::req_auth_basic(username, password) %>%
+      httr2::req_method("POST") %>%
+      httr2::req_perform(),
+    httr2_http_401 = function(cnd){stop("Incorrect username or password", call. = FALSE)}
+  )
+  
+  if (httr2::resp_status(response) == 200){
+    body <- response %>% httr2::resp_body_json()
+    token <- body$access_token
+    return(token)
+  } else {
+    stop("Something went wrong when trying to retrieve the token")
+  }
 }
 
 #' Extract and Aggregate Black Marble Data
@@ -538,10 +579,10 @@ count_n_obs <- function(values, coverage_fraction) {
 #' * For `product_id` `"VNP46A2"`, uses `Gap_Filled_DNB_BRDF-Corrected_NTL`.
 #' * For `product_id`s `"VNP46A3"` and `"VNP46A4"`, uses `NearNadir_Composite_Snow_Free`.
 #' For information on other variable choices, see [here](https://ladsweb.modaps.eosdis.nasa.gov/api/v2/content/archives/Document%20Archive/Science%20Data%20Product%20Documentation/VIIRS_Black_Marble_UG_v1.2_April_2021.pdf); for `VNP46A1`, see Table 3; for `VNP46A2` see Table 6; for `VNP46A3` and `VNP46A4`, see Table 9.
-#' @param quality_flag_rm Quality flag values to use to set values to `NA`. Each pixel has a quality flag value, where low quality values can be removed. Values are set to `NA` for each value in ther `quality_flag_rm` vector. (Default: `NULL`).
+#' @param quality_flag_rm Quality flag values to use to set values to `NA`. Each pixel has a quality flag value, where low quality values can be removed. Values are set to `NA` for each value in the `quality_flag_rm` vector. Note that `quality_flag_rm` does not apply for `VNP46A1`. (Default: `NULL`).
 #'
 #'
-#' For `VNP46A1` and `VNP46A2` (daily data):
+#' For `VNP46A2` (daily data):
 #' - `0`: High-quality, Persistent nighttime lights
 #' - `1`: High-quality, Ephemeral nighttime Lights
 #' - `2`: Poor-quality, Outlier, potential cloud contamination, or other issues
@@ -628,6 +669,13 @@ bm_extract <- function(roi_sf,
     stop("roi must be an sf object")
   }
   
+  # Required parameters used in try statement, so error not generated when used, 
+  # so use them here
+  roi_sf <- roi_sf
+  product_id <- product_id
+  date <- date
+  bearer <- bearer
+  
   # Assign interpolation variables ---------------------------------------------
   if(interpol_na == T){
     if(!exists("method")) method <- "linear"
@@ -712,130 +760,131 @@ bm_extract <- function(roi_sf,
     # Download data --------------------------------------------------------------
     r_list <- lapply(date, function(date_i){
       
-      out <- tryCatch(
-        {
+      #out <- tryCatch(
+      #  {
+      
+      #### Make name for raster based on date
+      date_name_i <- define_date_name(date_i, product_id)
+      
+      #### If save to file
+      if(output_location_type == "file"){
+        
+        out_name_end <- paste0("_", date_name_i, ".Rds")
+        out_name <- paste0(out_name_begin, out_name_end)
+        out_path <- file.path(file_dir, out_name)
+        
+        make_raster <- TRUE
+        if(file_skip_if_exists & file.exists(out_path)) make_raster <- FALSE
+        
+        if(make_raster){
           
-          #### Make name for raster based on date
-          date_name_i <- define_date_name(date_i, product_id)
+          #### Make raster
+          r <- bm_raster_i(roi_sf = roi_sf,
+                           product_id = product_id,
+                           date = date_i,
+                           bearer = bearer,
+                           variable = variable,
+                           quality_flag_rm = quality_flag_rm,
+                           check_all_tiles_exist = check_all_tiles_exist,
+                           h5_dir = h5_dir,
+                           quiet = quiet,
+                           temp_dir = temp_dir)
+          names(r) <- date_name_i
           
-          #### If save to file
-          if(output_location_type == "file"){
-            
-            out_name_end <- paste0("_", date_name_i, ".Rds")
-            out_name <- paste0(out_name_begin, out_name_end)
-            out_path <- file.path(file_dir, out_name)
-            
-            make_raster <- TRUE
-            if(file_skip_if_exists & file.exists(out_path)) make_raster <- FALSE
-            
-            if(make_raster){
-              
-              #### Make raster
-              r <- bm_raster_i(roi_sf = roi_sf,
-                               product_id = product_id,
-                               date = date_i,
-                               bearer = bearer,
-                               variable = variable,
-                               quality_flag_rm = quality_flag_rm,
-                               check_all_tiles_exist = check_all_tiles_exist,
-                               h5_dir = h5_dir,
-                               quiet = quiet,
-                               temp_dir = temp_dir)
-              names(r) <- date_name_i
-              
-              #### Extract
-              r_agg <- exact_extract(x = r, y = roi_sf, fun = aggregation_fun, 
-                                     progress = !quiet)
-              roi_df <- roi_sf
-              roi_df$geometry <- NULL
-              
-              if(length(aggregation_fun) > 1){
-                names(r_agg) <- paste0("ntl_", names(r_agg))
-                r_agg <- bind_cols(r_agg, roi_df)
-              } else{
-                roi_df[[paste0("ntl_", aggregation_fun)]] <- r_agg
-                r_agg <- roi_df
-              }
-              
-              if(add_n_pixels){
-                
-                r_n_obs <- exact_extract(r, roi_sf, function(values, coverage_fraction)
-                  sum(!is.na(values)),
-                  progress = !quiet)
-                
-                r_n_obs_poss <- exact_extract(r, roi_sf, function(values, coverage_fraction)
-                  length(values),
-                  progress = !quiet)
-                
-                r_agg$n_pixels           <- r_n_obs_poss
-                r_agg$n_non_na_pixels    <- r_n_obs
-                r_agg$prop_non_na_pixels <- r_agg$n_non_na_pixels / r_agg$n_pixels 
-              }
-              
-              r_agg$date <- date_i
-              
-              #### Export
-              saveRDS(r_agg, out_path)
-              
-            } else{
-              warning(paste0('"', out_path, '" already exists; skipping.\n'))
-            }
-            
-            r_out <- NULL # Saving as file, so output from function should be NULL
-            
+          #### Extract
+          r_agg <- exact_extract(x = r, y = roi_sf, fun = aggregation_fun, 
+                                 progress = !quiet)
+          roi_df <- roi_sf
+          roi_df$geometry <- NULL
+          
+          if(length(aggregation_fun) > 1){
+            names(r_agg) <- paste0("ntl_", names(r_agg))
+            r_agg <- bind_cols(r_agg, roi_df)
           } else{
-            r_out <- bm_raster_i(roi_sf = roi_sf,
-                                 product_id = product_id,
-                                 date = date_i,
-                                 bearer = bearer,
-                                 variable = variable,
-                                 quality_flag_rm = quality_flag_rm,
-                                 check_all_tiles_exist = check_all_tiles_exist,
-                                 h5_dir = h5_dir,
-                                 quiet = quiet,
-                                 temp_dir = temp_dir)
-            names(r_out) <- date_name_i
-            
-            if(add_n_pixels){
-              
-              r_n_obs <- exact_extract(r_out, roi_sf, function(values, coverage_fraction)
-                sum(!is.na(values)),
-                progress = !quiet)
-              
-              r_n_obs_poss <- exact_extract(r_out, roi_sf, function(values, coverage_fraction)
-                length(values),
-                progress = !quiet)
-              
-              roi_sf$n_pixels           <- r_n_obs_poss
-              roi_sf$n_non_na_pixels    <- r_n_obs
-              roi_sf$prop_non_na_pixels <- roi_sf$n_non_na_pixels / roi_sf$n_pixels 
-            }
-            
-            r_out <- exact_extract(x = r_out, y = roi_sf, fun = aggregation_fun,
-                                   progress = !quiet)
-            
-            roi_df <- roi_sf
-            roi_df$geometry <- NULL
-            
-            if(length(aggregation_fun) > 1){
-              names(r_out) <- paste0("ntl_", names(r_out))
-              r_out <- bind_cols(r_out, roi_df)
-            } else{
-              
-              roi_df[[paste0("ntl_", aggregation_fun)]] <- r_out
-              r_out <- roi_df
-            }
-            
-            r_out$date <- date_i
+            roi_df[[paste0("ntl_", aggregation_fun)]] <- r_agg
+            r_agg <- roi_df
           }
           
-          return(r_out)
+          if(add_n_pixels){
+            
+            r_n_obs <- exact_extract(r, roi_sf, function(values, coverage_fraction)
+              sum(!is.na(values)),
+              progress = !quiet)
+            
+            r_n_obs_poss <- exact_extract(r, roi_sf, function(values, coverage_fraction)
+              length(values),
+              progress = !quiet)
+            
+            r_agg$n_pixels           <- r_n_obs_poss
+            r_agg$n_non_na_pixels    <- r_n_obs
+            r_agg$prop_non_na_pixels <- r_agg$n_non_na_pixels / r_agg$n_pixels 
+          }
           
-        },
-        error=function(e) {
-          return(NULL)
+          r_agg$date <- date_i
+          
+          #### Export
+          saveRDS(r_agg, out_path)
+          
+        } else{
+          warning(paste0('"', out_path, '" already exists; skipping.\n'))
         }
-      )
+        
+        r_out <- NULL # Saving as file, so output from function should be NULL
+        
+      } else{
+        r_out <- bm_raster_i(roi_sf = roi_sf,
+                             product_id = product_id,
+                             date = date_i,
+                             bearer = bearer,
+                             variable = variable,
+                             quality_flag_rm = quality_flag_rm,
+                             check_all_tiles_exist = check_all_tiles_exist,
+                             h5_dir = h5_dir,
+                             quiet = quiet,
+                             temp_dir = temp_dir)
+        names(r_out) <- date_name_i
+        
+        if(add_n_pixels){
+          
+          r_n_obs <- exact_extract(r_out, roi_sf, function(values, coverage_fraction)
+            sum(!is.na(values)),
+            progress = !quiet)
+          
+          r_n_obs_poss <- exact_extract(r_out, roi_sf, function(values, coverage_fraction)
+            length(values),
+            progress = !quiet)
+          
+          roi_sf$n_pixels           <- r_n_obs_poss
+          roi_sf$n_non_na_pixels    <- r_n_obs
+          roi_sf$prop_non_na_pixels <- roi_sf$n_non_na_pixels / roi_sf$n_pixels 
+        }
+        
+        r_out <- exact_extract(x = r_out, y = roi_sf, fun = aggregation_fun,
+                               progress = !quiet)
+        
+        roi_df <- roi_sf
+        roi_df$geometry <- NULL
+        
+        if(length(aggregation_fun) > 1){
+          names(r_out) <- paste0("ntl_", names(r_out))
+          r_out <- bind_cols(r_out, roi_df)
+        } else{
+          
+          roi_df[[paste0("ntl_", aggregation_fun)]] <- r_out
+          r_out <- roi_df
+        }
+        
+        r_out$date <- date_i
+      }
+      
+      return(r_out)
+      
+      ## HERE
+      #  },
+      #  error=function(e) {
+      #    return(NULL)
+      #  }
+      #)
       
     })
     
@@ -851,11 +900,23 @@ bm_extract <- function(roi_sf,
   # Output dataframe when output_location_type = "file" ------------------------
   if(output_location_type == "file"){
     if(!file_return_null){
-      r <- file_dir %>%
-        list.files(full.names = T,
-                   pattern = paste0("*.Rds")) %>%
-        str_subset(out_name_begin) %>%
+      
+      ## Output path
+      date_names <- define_date_name(date, product_id)
+      
+      out_name_end <- paste0("_",
+                             date_names,
+                             ".Rds")
+      out_name <- paste0(out_name_begin, out_name_end)
+      
+      ## Restrict to files that exist, in case user enters date with no data
+      ## (eg, year after current year)
+      all_files <- list.files(file_dir)
+      out_name <- out_name[out_name %in% all_files]
+      
+      r <- file.path(file_dir, out_name) %>%
         map_df(readRDS)
+      
     } else{
       r <- NULL
     }
@@ -885,10 +946,10 @@ bm_extract <- function(roi_sf,
 #' * For `product_id` `"VNP46A2"`, uses `Gap_Filled_DNB_BRDF-Corrected_NTL`.
 #' * For `product_id`s `"VNP46A3"` and `"VNP46A4"`, uses `NearNadir_Composite_Snow_Free`.
 #' For information on other variable choices, see [here](https://ladsweb.modaps.eosdis.nasa.gov/api/v2/content/archives/Document%20Archive/Science%20Data%20Product%20Documentation/VIIRS_Black_Marble_UG_v1.2_April_2021.pdf); for `VNP46A1`, see Table 3; for `VNP46A2` see Table 6; for `VNP46A3` and `VNP46A4`, see Table 9.
-#' @param quality_flag_rm Quality flag values to use to set values to `NA`. Each pixel has a quality flag value, where low quality values can be removed. Values are set to `NA` for each value in ther `quality_flag_rm` vector. (Default: `NULL`).
+#' @param quality_flag_rm Quality flag values to use to set values to `NA`. Each pixel has a quality flag value, where low quality values can be removed. Values are set to `NA` for each value in the `quality_flag_rm` vector. Note that `quality_flag_rm` does not apply for `VNP46A1`. (Default: `NULL`).
 #'
 #'
-#' For `VNP46A1` and `VNP46A2` (daily data):
+#' For `VNP46A2` (daily data):
 #' - `0`: High-quality, Persistent nighttime lights
 #' - `1`: High-quality, Ephemeral nighttime Lights
 #' - `2`: Poor-quality, Outlier, potential cloud contamination, or other issues
@@ -949,6 +1010,7 @@ bm_extract <- function(roi_sf,
 #' @import exactextractr
 #' @import stringr
 #' @import httr
+#' @import httr2
 #' @import lubridate
 #' @rawNamespace import(tidyr, except = c(extract))
 #' @rawNamespace import(purrr, except = c(flatten_df, values))
@@ -987,6 +1049,13 @@ bm_raster <- function(roi_sf,
     stop("roi must be an sf object")
   }
   
+  # Required parameters used in try statement, so error not generated when used, 
+  # so use them here
+  roi_sf     <- roi_sf
+  product_id <- product_id
+  date       <- date
+  bearer     <- bearer
+  
   # Assign interpolation variables ---------------------------------------------
   if(interpol_na == T){
     if(!exists("method")) method <- "linear"
@@ -1022,70 +1091,65 @@ bm_raster <- function(roi_sf,
   # Download data --------------------------------------------------------------
   r_list <- lapply(date, function(date_i){
     
-    out <- tryCatch(
-      {
+    #### Make name for raster based on date
+    date_name_i <- define_date_name(date_i, product_id)
+    
+    #### If save as tif format
+    if(output_location_type == "file"){
+      
+      ## Output path
+      out_name_end <- paste0("_",
+                             date_name_i,
+                             ".tif")
+      out_name <- paste0(out_name_begin, out_name_end)
+      
+      out_path <- file.path(file_dir, out_name)
+      
+      make_raster <- TRUE
+      if(file_skip_if_exists & file.exists(out_path)) make_raster <- FALSE
+      
+      if(make_raster){
         
-        #### Make name for raster based on date
-        date_name_i <- define_date_name(date_i, product_id)
+        r <- bm_raster_i(roi_sf = roi_sf,
+                         product_id = product_id,
+                         date = date_i,
+                         bearer = bearer,
+                         variable = variable,
+                         quality_flag_rm = quality_flag_rm,
+                         check_all_tiles_exist = check_all_tiles_exist,
+                         h5_dir = h5_dir,
+                         quiet = quiet,
+                         temp_dir = temp_dir)
+        names(r) <- date_name_i
         
-        #### If save as tif format
-        if(output_location_type == "file"){
-          
-          ## Output path
-          out_name_end <- paste0("_",
-                                 date_name_i,
-                                 ".tif")
-          out_name <- paste0(out_name_begin, out_name_end)
-          
-          out_path <- file.path(file_dir, out_name)
-          
-          make_raster <- TRUE
-          if(file_skip_if_exists & file.exists(out_path)) make_raster <- FALSE
-          
-          if(make_raster){
-            
-            r <- bm_raster_i(roi_sf = roi_sf,
-                             product_id = product_id,
-                             date = date_i,
-                             bearer = bearer,
-                             variable = variable,
-                             quality_flag_rm = quality_flag_rm,
-                             check_all_tiles_exist = check_all_tiles_exist,
-                             h5_dir = h5_dir,
-                             quiet = quiet,
-                             temp_dir = temp_dir)
-            names(r) <- date_name_i
-            
-            writeRaster(r, out_path)
-            
-          } else{
-            message(paste0('"', out_path, '" already exists; skipping.\n'))
-          }
-          
-          r_out <- NULL # Saving as tif file, so output from function should be NULL
-          
-        } else{
-          r_out <- bm_raster_i(roi_sf = roi_sf,
-                               product_id = product_id,
-                               date = date_i,
-                               bearer = bearer,
-                               variable = variable,
-                               quality_flag_rm = quality_flag_rm,
-                               check_all_tiles_exist = check_all_tiles_exist,
-                               h5_dir = h5_dir,
-                               quiet = quiet,
-                               temp_dir = temp_dir)
-          names(r_out) <- date_name_i
-          
-        }
+        writeRaster(r, out_path)
         
-        return(r_out)
-        
-      },
-      error=function(e) {
-        return(NULL)
+      } else{
+        message(paste0('"', out_path, '" already exists; skipping.\n'))
       }
-    )
+      
+      r_out <- NULL # Saving as tif file, so output from function should be NULL
+      
+    } else{
+      
+      r_out <- bm_raster_i(roi_sf = roi_sf,
+                           product_id = product_id,
+                           date = date_i,
+                           bearer = bearer,
+                           variable = variable,
+                           quality_flag_rm = quality_flag_rm,
+                           check_all_tiles_exist = check_all_tiles_exist,
+                           h5_dir = h5_dir,
+                           quiet = quiet,
+                           temp_dir = temp_dir)
+      names(r_out) <- date_name_i
+      
+    }
+    
+    return(r_out)
+    
+    
+    #)
     
   })
   
@@ -1117,11 +1181,23 @@ bm_raster <- function(roi_sf,
   # Output raster when output_location_type = "file" ---------------------------
   if(output_location_type == "file"){
     if(!file_return_null){
-      r <- file_dir %>%
-        list.files(full.names = T,
-                   pattern = paste0("*.tif")) %>%
-        str_subset(out_name_begin) %>%
+      
+      ## Output path
+      date_names <- define_date_name(date, product_id)
+      
+      out_name_end <- paste0("_",
+                             date_names,
+                             ".tif")
+      out_name <- paste0(out_name_begin, out_name_end)
+      
+      ## Restrict to files that exist, in case user enters date with no data
+      ## (eg, year after current year)
+      all_files <- list.files(file_dir)
+      out_name <- out_name[out_name %in% all_files]
+      
+      r <- file.path(file_dir, out_name) %>%
         rast()
+      
     } else{
       r <- NULL
     }
@@ -1174,10 +1250,12 @@ bm_raster_i <- function(roi_sf,
                                         months = month,
                                         days = day)
   
+  
   # Intersecting tiles ---------------------------------------------------------
   # Remove grid along edges, which causes st_intersects to fail
   bm_tiles_sf <- bm_tiles_sf[!(bm_tiles_sf$TileID %>% str_detect("h00")),]
   bm_tiles_sf <- bm_tiles_sf[!(bm_tiles_sf$TileID %>% str_detect("v00")),]
+  
   
   inter <- tryCatch(
     {
@@ -1209,9 +1287,12 @@ bm_raster_i <- function(roi_sf,
     message(paste0("Processing ", nrow(bm_files_df), " nighttime light tiles"))
   }
   
+  
   r_list <- lapply(bm_files_df$name, function(name_i){
     download_raster(name_i, temp_dir, variable, bearer, quality_flag_rm, h5_dir, quiet)
   })
+  
+  
   
   if(length(r_list) == 1){
     r <- r_list[[1]]
@@ -1227,5 +1308,4 @@ bm_raster_i <- function(roi_sf,
   
   return(r)
 }
-
 

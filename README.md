@@ -2,16 +2,15 @@
 
 <!-- badges: start -->
 
-[![CRAN_Status_Badge](http://www.r-pkg.org/badges/version/blackmarbler)](https://cran.r-project.org/package=blackmarbler)
-[![R-CMD-check](https://github.com/dime-worldbank/googletraffic/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/worldbank/blackmarbler/actions/workflows/R-CMD-check.yaml)
-![downloads](http://cranlogs.r-pkg.org/badges/grand-total/blackmarbler)
+[![CRAN_Status_Badge](https://www.r-pkg.org/badges/version/blackmarbler)](https://cran.r-project.org/package=blackmarbler)
+![downloads](https://cranlogs.r-pkg.org/badges/grand-total/blackmarbler)
 [![GitHub Repo stars](https://img.shields.io/github/stars/worldbank/blackmarbler)](https://github.com/worldbank/blackmarbler)
 [![activity](https://img.shields.io/github/commit-activity/m/worldbank/blackmarbler)](https://github.com/worldbank/blackmarbler/graphs/commit-activity)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/license/mit)
 
 <!-- badges: end -->
 
-**BlackMarbleR** is a R package that provides a simple way to use nighttime lights data from NASA's Black Marble. [Black Marble](https://blackmarble.gsfc.nasa.gov) is a [NASA Earth Science Data Systems (ESDS)](https://www.earthdata.nasa.gov) project that provides a product suite of daily, monthly and yearly global [nighttime lights](https://www.earthdata.nasa.gov/learn/backgrounders/nighttime-lights). This package automates the process of downloading all relevant tiles from the [NASA LAADS DAAC](https://www.earthdata.nasa.gov/eosdis/daacs/laads) to cover a region of interest, converting and mosaicing the raw files (in HDF5 format) to georeferenced rasters.
+**BlackMarbleR** is a R package that provides a simple way to use nighttime lights data from NASA's Black Marble. [Black Marble](https://blackmarble.gsfc.nasa.gov) is a [NASA Earth Science Data Systems (ESDS)](https://www.earthdata.nasa.gov) project that provides a product suite of daily, monthly and yearly global [nighttime lights](https://www.earthdata.nasa.gov/topics/human-dimensions/nighttime-lights). This package automates the process of downloading all relevant tiles from the [NASA LAADS DAAC](https://ladsweb.modaps.eosdis.nasa.gov/) to cover a region of interest, converting and mosaicing the raw files (in HDF5 format) to georeferenced rasters.
 
 * [Installation](#installation)
 * [Bearer token](#token)
@@ -46,18 +45,43 @@ devtools::install_github("worldbank/blackmarbler")
 
 ## Bearer Token <a name="token">
 
-The function requires using a **Bearer Token**; to obtain a token, follow the below steps:
+To obtain a bearer token, you'll need to have a registered [NASA Earth Data account](https://ladsweb.modaps.eosdis.nasa.gov/). On the webpage, click "login" and create a username/password if needed.
 
-1. Go to the [NASA LAADS Archive](https://ladsweb.modaps.eosdis.nasa.gov/archive/allData/5000/VNP46A3/)
-2. Click "Login" (bottom on top right); create an account if needed.
-3. Click "See wget Download Command" (bottom near top, in the middle)
-4. After clicking, you will see text that can be used to download data. The "Bearer" token will be a long string in red.
+After an account is created, the NASA Bearer Token can be retrieved either using the `get_nasa_token` function or manually (see below).
 
-**After logging in, the below will show the bearer token in red instead of `INSERT_DOWNLOAD_TOKEN_HERE`.** Sometimes, after logging in, the NASA website will redirect to another part of the website. To obtain the bearer token, just navigate to the [NASA LAADS Archive](https://ladsweb.modaps.eosdis.nasa.gov/archive/allData/5000/VNP46A3/) after logging in.
+### Programmatically retrieve token <a name="token-automatic">
+
+The NASA Bearer Token can also be programmatically retrieved using the `get_nasa_token()` function. After making an account, the `get_nasa_token()` function uses your username and password to retrieve the Bearer token.
+
+```r
+bearer <- get_nasa_token(username = "USERNAME-HERE", 
+                         password = "PASSWORD-HERE")
+```
+
+### Manually retrieve token <a name="token-manual">
+
+The function requires using a **Earthdata Download Bearer Token**; to obtain a token, follow the below steps:
+
+1. Go to the [NASA LAADS Archive](https://ladsweb.modaps.eosdis.nasa.gov/missions-and-measurements/products/VNP46A4/)
+2. Click "Login" (button on top right), and click "Earthdata Login"; create an account if needed.
+3. Enter your username and password.
+4. Click "Login", then "Generate Token" on the dropdown.
+5. Click the "Generate Token" tab, then click the green button to generate a token
+6. Click the blue "Show token" button; this is your bearer token. It will be a long string of text (over 500 characters).
 
 <p align="center">
-<img src="man/figures/nasa_laads_login.png" alt="NASA LAADS Bearer Token" width="800"/>
+<img src="man/figures/nasa_login_1.png" alt="NASA LAADS Bearer Token" width="500"/>
 </p>
+
+<p align="center">
+<img src="man/figures/nasa_login_2.png" alt="NASA LAADS Bearer Token" width="500"/>
+</p>
+
+<p align="center">
+<img src="man/figures/nasa_login_3.png" alt="NASA LAADS Bearer Token" width="500"/>
+</p>
+
+
 
 ## Usage <a name="usage">
 
@@ -312,6 +336,6 @@ If `output_location_type = "file"`, the following arguments can be used:
 
 For more information on NASA Black Marble, see:
 
-* [Academic paper](https://www.sciencedirect.com/science/article/pii/S003442571830110X)
-* [Substack Post](https://yohaniddawela.substack.com/p/not-all-nightlight-datasets-are-the)
+* [Academic paper](https://doi.org/10.1016/j.rse.2018.03.017)
+* [Substack Post](https://www.spatialedge.co/p/not-all-nightlight-datasets-are-the)
 * [Webinar](https://appliedsciences.nasa.gov/get-involved/training/english/arset-introduction-nasas-black-marble-night-lights-data)
