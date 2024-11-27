@@ -7,7 +7,7 @@
 [![GitHub Repo stars](https://img.shields.io/github/stars/worldbank/blackmarbler)](https://github.com/worldbank/blackmarbler)
 [![activity](https://img.shields.io/github/commit-activity/m/worldbank/blackmarbler)](https://github.com/worldbank/blackmarbler/graphs/commit-activity)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/license/mit)
-
+[![R-CMD-check](https://github.com/worldbank/blackmarbler/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/worldbank/blackmarbler/actions/workflows/R-CMD-check.yaml)
 <!-- badges: end -->
 
 **BlackMarbleR** is a R package that provides a simple way to use nighttime lights data from NASA's Black Marble. [Black Marble](https://blackmarble.gsfc.nasa.gov) is a [NASA Earth Science Data Systems (ESDS)](https://www.earthdata.nasa.gov) project that provides a product suite of daily, monthly and yearly global [nighttime lights](https://www.earthdata.nasa.gov/topics/human-dimensions/nighttime-lights). This package automates the process of downloading all relevant tiles from the [NASA LAADS DAAC](https://ladsweb.modaps.eosdis.nasa.gov/) to cover a region of interest, converting and mosaicing the raw files (in HDF5 format) to georeferenced rasters.

@@ -321,20 +321,27 @@ read_bm_csv <- function(year,
                         day,
                         product_id){
   
-  
-  
-  df <- readr::read_csv(paste0("https://ladsweb.modaps.eosdis.nasa.gov/archive/allData/5000/",product_id,"/",year,"/",day,".csv"),
-                        show_col_types = F)
-  
-  
-  df$year <- year
-  df$day <- day
-  
-  df
+  # 
+  df_out <- tryCatch(
+    {
+      df <- readr::read_csv(paste0("https://ladsweb.modaps.eosdis.nasa.gov/archive/allData/5000/",product_id,"/",year,"/",day,".csv"),
+                            show_col_types = F)
+      
+      
+      df$year <- year
+      df$day <- day
+      
+      df
+    },
+    error = function(e){
+      #warning(paste0("Error with year: ", year, "; day: ", day))
+      data.frame(NULL)
+    }
+  )
   
   Sys.sleep(0.1)
   
-  return(df)
+  return(df_out)
 }
 
 create_dataset_name_df <- function(product_id,
@@ -760,8 +767,8 @@ bm_extract <- function(roi_sf,
     # Download data --------------------------------------------------------------
     r_list <- lapply(date, function(date_i){
       
-      #out <- tryCatch(
-      #  {
+      # out <- tryCatch(
+      #    {
       
       #### Make name for raster based on date
       date_name_i <- define_date_name(date_i, product_id)
@@ -879,12 +886,14 @@ bm_extract <- function(roi_sf,
       
       return(r_out)
       
-      ## HERE
+      # TRY START    
+      #    
       #  },
       #  error=function(e) {
       #    return(NULL)
       #  }
-      #)
+      # )
+      # TRY END
       
     })
     
@@ -1091,6 +1100,10 @@ bm_raster <- function(roi_sf,
   # Download data --------------------------------------------------------------
   r_list <- lapply(date, function(date_i){
     
+    #out <- tryCatch(
+    #  {
+    
+    
     #### Make name for raster based on date
     date_name_i <- define_date_name(date_i, product_id)
     
@@ -1148,8 +1161,15 @@ bm_raster <- function(roi_sf,
     
     return(r_out)
     
+    # TRY START   
+    #   },
+    #    error=function(e) {
+    #      return(NULL)
+    #    }
+    #  )
+    # TRY END 
     
-    #)
+    
     
   })
   
