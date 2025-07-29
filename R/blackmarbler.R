@@ -175,147 +175,14 @@ apply_scaling_factor <- function(x, variable){
     "OffNadir_Composite_Snow_Free_Std")
   ){
     
-    x <- x * 0.1
+    # Not needed with Collection 2
+    #x <- x * 0.1
     
   }
   
   return(x)
 }
 
-# file_to_raster <- function(h5_file,
-#                            variable,
-#                            quality_flag_rm){
-#   # Converts h5 file to raster.
-#   # ARGS
-#   # --f: Filepath to h5 file
-#   
-#   ## Data
-#   h5_data <- h5file(h5_file, "r+")
-#   
-#   #### Daily
-#   if(h5_file %>% str_detect("VNP46A1|VNP46A2")){
-#     
-#     tile_i <- h5_file %>% stringr::str_extract("h\\d{2}v\\d{2}")
-#     
-#     bm_tiles_sf <- read_sf("https://raw.githubusercontent.com/worldbank/blackmarbler/main/data/blackmarbletiles.geojson")
-#     grid_i_sf <- bm_tiles_sf[bm_tiles_sf$TileID %in% tile_i,]
-#     
-#     grid_i_sf_box <- grid_i_sf %>%
-#       st_bbox()
-#     
-#     xMin <- min(grid_i_sf_box$xmin) %>% round()
-#     yMin <- min(grid_i_sf_box$ymin) %>% round()
-#     xMax <- max(grid_i_sf_box$xmax) %>% round()
-#     yMax <- max(grid_i_sf_box$ymax) %>% round()
-#     
-#     var_names <- h5_data[["HDFEOS/GRIDS/VNP_Grid_DNB/Data Fields"]]$names
-#     
-#     if(!(variable %in% var_names)){
-#       warning(paste0("'", variable, "'",
-#                      " not a valid variable option. Valid options include:\n",
-#                      paste(var_names, collapse = "\n")
-#       ))
-#     }
-#     
-#     out <- h5_data[[paste0("HDFEOS/GRIDS/VNP_Grid_DNB/Data Fields/", variable)]][,]
-#     
-#     # VNP46A1 does not have Mandatory_Quality_Flag
-#     if(h5_file %>% str_detect("VNP46A2")){
-#       qf  <- h5_data[["HDFEOS/GRIDS/VNP_Grid_DNB/Data Fields/Mandatory_Quality_Flag"]][,]
-#       
-#       if(length(quality_flag_rm) > 0){
-#         if(variable %in% c("DNB_BRDF-Corrected_NTL",
-#                            "Gap_Filled_DNB_BRDF-Corrected_NTL",
-#                            "Latest_High_Quality_Retrieval")){
-#           
-#           for(val in quality_flag_rm){ # out[qf %in% quality_flag_rm] doesn't work, so loop
-#             out[qf == val] <- NA
-#           }
-#         }
-#       }
-#     }
-#     
-#     #### Monthly/Annually
-#   } else{
-#     
-#     lat <- h5_data[["HDFEOS/GRIDS/VIIRS_Grid_DNB_2d/Data Fields/lat"]][]
-#     lon <- h5_data[["HDFEOS/GRIDS/VIIRS_Grid_DNB_2d/Data Fields/lon"]][]
-#     
-#     var_names <- h5_data[["HDFEOS/GRIDS/VIIRS_Grid_DNB_2d/Data Fields"]]$names
-#     
-#     if(!(variable %in% var_names)){
-#       warning(paste0("'", variable, "'",
-#                      " not a valid variable option. Valid options include:\n",
-#                      paste(var_names, collapse = "\n")
-#       ))
-#     }
-#     
-#     out <- h5_data[[paste0("HDFEOS/GRIDS/VIIRS_Grid_DNB_2d/Data Fields/", variable)]][,]
-#     
-#     if(length(quality_flag_rm) > 0){
-#       
-#       variable_short <- variable %>%
-#         str_replace_all("_Num", "") %>%
-#         str_replace_all("_Std", "")
-#       
-#       qf_name <- paste0(variable_short, "_Quality")
-#       
-#       if(qf_name %in% var_names){
-#         
-#         qf <- h5_data[[paste0("HDFEOS/GRIDS/VIIRS_Grid_DNB_2d/Data Fields/", qf_name)]][,]
-#         
-#         for(val in quality_flag_rm){ # out[qf %in% quality_flag_rm] doesn't work, so loop
-#           out[qf == val] <- NA
-#         }
-#         
-#       }
-#       
-#     }
-#     
-#     if(class(out[1,1])[1] != "numeric"){
-#       out <- matrix(as.numeric(out),  # Convert to numeric matrix
-#                     ncol = ncol(out))
-#     }
-#     
-#     xMin <- min(lon) %>% round()
-#     yMin <- min(lat) %>% round()
-#     xMax <- max(lon) %>% round()
-#     yMax <- max(lat) %>% round()
-#     
-#   }
-#   
-#   ## Metadata
-#   nRows      <- nrow(out)
-#   nCols      <- ncol(out)
-#   res        <- nRows
-#   #nodata_val <- NA
-#   myCrs      <- "EPSG:4326"
-#   
-#   ## Make Raster
-#   
-#   #transpose data to fix flipped row and column order
-#   #depending upon how your data are formatted you might not have to perform this
-#   out <- t(out)
-#   
-#   #assign data ignore values to NA
-#   #out[out == nodata_val] <- NA
-#   
-#   #turn the out object into a raster
-#   outr <- terra::rast(out,
-#                       crs = myCrs,
-#                       extent = c(xMin,xMax,yMin,yMax))
-#   
-#   #set fill values to NA
-#   outr <- remove_fill_value(outr, variable)
-#   
-#   #apply scaling factor
-#   outr <- apply_scaling_factor(outr, variable)
-#   
-#   #h5closeAll()
-#   h5_data$close_all()
-#   
-#   return(outr)
-# }
 
 file_to_raster <- function(h5_file,
                            variable,
@@ -395,10 +262,9 @@ read_bm_csv <- function(year,
                         day,
                         product_id){
   
-  # 
   df_out <- tryCatch(
     {
-      df <- readr::read_csv(paste0("https://ladsweb.modaps.eosdis.nasa.gov/archive/allData/5000/",product_id,"/",year,"/",day,".csv"),
+      df <- readr::read_csv(paste0("https://ladsweb.modaps.eosdis.nasa.gov/archive/allData/5200/",product_id,"/",year,"/",day,".csv"),
                             show_col_types = F)
       
       
@@ -507,16 +373,15 @@ download_raster <- function(file_name,
                             bearer,
                             quality_flag_rm,
                             h5_dir,
+                            download_method,
                             quiet){
   
   year       <- file_name %>% substring(10,13)
   day        <- file_name %>% substring(14,16)
   product_id <- file_name %>% substring(1,7)
   
-  url <- paste0('https://ladsweb.modaps.eosdis.nasa.gov/archive/allData/5000/',
+  url <- paste0('https://ladsweb.modaps.eosdis.nasa.gov/archive/allData/5200/',
                 product_id, '/', year, '/', day, '/', file_name)
-  
-  #headers <- c('Authorization' = paste('Bearer', bearer))
   
   if(is.null(h5_dir)){
     download_path <- file.path(temp_dir, file_name)
@@ -528,23 +393,61 @@ download_raster <- function(file_name,
     
     if(quiet == FALSE) message(paste0("Processing: ", file_name))
     
-    response <- httr2::request(url) %>%
-      httr2::req_headers('Authorization' = paste('Bearer', bearer)) %>%
-      httr2::req_timeout(60) %>%
-      httr2::req_perform() 
-    
-    if(response$status_code != 200){
-      message(response)
-      stop("Error in downloading data")
-    }
-    
-    if(response$status_code == 200){
-      if(length(response$body) < 10000){
-        stop(paste0("\nISSUE WITH BEARER TOKEN. You may need to generate a new token. Ensure that select EULAs are accepted. Please see the instructions here: https://github.com/worldbank/blackmarbler?tab=readme-ov-file#bearer-token-"))
+    if(download_method == "httr"){
+      # Sometimes get 401 error which triggers an error; if happens, try again
+      response <- NULL
+      attempts <- 0
+      max_attempts <- 5
+      
+      while (attempts < max_attempts) {
+        attempts <- attempts + 1
+        tryCatch({
+          response <- httr2::request(url) %>%
+            httr2::req_headers('Authorization' = paste('Bearer', bearer)) %>%
+            httr2::req_timeout(60) %>%
+            httr2::req_perform()
+          
+          break  # Exit loop if successful
+        }, error = function(e) {
+          if (attempts < max_attempts) {
+            message(sprintf("Attempt %d failed: %s. Retrying in 2 seconds...", attempts, e$message))
+            Sys.sleep(2)
+          } else {
+            stop("All attempts failed. Error: ", e$message)
+          }
+        })
       }
+      
+      if(response$status_code != 200){
+        message(response)
+        stop("Error in downloading data")
+      }
+      
+      if(response$status_code == 200){
+        if(length(response$body) < 10000){
+          stop(paste0("\nISSUE WITH BEARER TOKEN. You may need to generate a new token. Ensure that select EULAs are accepted. Please see the instructions here: https://github.com/worldbank/blackmarbler?tab=readme-ov-file#bearer-token-"))
+        }
+      }
+      
+      writeBin(httr2::resp_body_raw(response), download_path)
+    } else{
+      
+      if(is.null(h5_dir)){
+        download_dir <- temp_dir
+      } else{
+        download_dir <- h5_dir
+      }
+      
+      cmd <- sprintf(
+        'wget --no-verbose -e robots=off -m -np -R .html,.tmp -nH --cut-dirs=6 "%s" --header="Authorization: Bearer %s" -P "%s"',
+        url,
+        bearer,
+        download_dir
+      )
+      
+      system(cmd)
+      
     }
-    
-    writeBin(httr2::resp_body_raw(response), download_path)
     
   }
   
@@ -674,6 +577,7 @@ get_nasa_token <- function(username, password) {
 #' @param file_skip_if_exists (If `output_location_type = file`). Whether the function should first check wither the file already exists, and to skip downloading or extracting data if the data for that date if the file already exists (default: `TRUE`).
 #' @param file_return_null Whether to return `NULL` instead of a `dataframe`. When `output_location_type = 'file'`, the function will export data to the `file_dir` directory. When `file_return_null = FALSE`, the function will also return a `dataframe` of the queried data---so the data is available in R memory. Setting `file_return_null = TRUE`, data will be saved to `file_dir` but no data will be returned by the function to R memory (default: `FALSE`).
 #' @param h5_dir Black Marble data are originally downloaded as `h5` files. If `h5_dir = NULL`, the function downloads to a temporary directory then deletes the directory. If `h5_dir` is set to a path, `h5` files are saved to that directory and not deleted. The function will then check if the needed `h5` file already exists in the directory; if it exists, the function will not re-download the `h5` file.
+#' @param download_method Method to download data from NASA LAADS Archive: "`httr`" or "`wget`". If `httr`, uses the `httr2` R package to download data. If `wget`, uses the `wget` command line tool. `httr` is fully integrated in R, while `wget` requires the `wget` system command. `wget` can be more efficient and can help avoid network issues. (Default: `"httr"`).
 #' @param quiet Suppress output that show downloading progress and other messages. (Default: `FALSE`).
 #'
 #' @param ... Additional arguments for `terra::approximate`, if `interpol_na = TRUE`
@@ -725,6 +629,7 @@ bm_extract <- function(roi_sf,
                        file_skip_if_exists = TRUE,
                        file_return_null = FALSE,
                        h5_dir = NULL,
+                       download_method = "httr",
                        quiet = FALSE,
                        ...){
   
@@ -861,46 +766,51 @@ bm_extract <- function(roi_sf,
                            quality_flag_rm = quality_flag_rm,
                            check_all_tiles_exist = check_all_tiles_exist,
                            h5_dir = h5_dir,
+                           download_method = download_method,
                            quiet = quiet,
                            temp_dir = temp_dir)
-          names(r) <- date_name_i
           
-          #### Extract
-          r_agg <- exact_extract(x = r, y = roi_sf, fun = aggregation_fun, 
-                                 progress = !quiet)
-          roi_df <- roi_sf
-          roi_df$geometry <- NULL
-          
-          if(length(aggregation_fun) > 1){
-            names(r_agg) <- paste0("ntl_", names(r_agg))
-            r_agg <- bind_cols(r_agg, roi_df)
+          if(!is.null(r)){
+            names(r) <- date_name_i
+            
+            #### Extract
+            r_agg <- exact_extract(x = r, y = roi_sf, fun = aggregation_fun, 
+                                   progress = !quiet)
+            roi_df <- roi_sf
+            roi_df$geometry <- NULL
+            
+            if(length(aggregation_fun) > 1){
+              names(r_agg) <- paste0("ntl_", names(r_agg))
+              r_agg <- bind_cols(r_agg, roi_df)
+            } else{
+              roi_df[[paste0("ntl_", aggregation_fun)]] <- r_agg
+              r_agg <- roi_df
+            }
+            
+            if(add_n_pixels){
+              
+              r_n_obs <- exact_extract(r, roi_sf, function(values, coverage_fraction)
+                sum(!is.na(values)),
+                progress = !quiet)
+              
+              r_n_obs_poss <- exact_extract(r, roi_sf, function(values, coverage_fraction)
+                length(values),
+                progress = !quiet)
+              
+              r_agg$n_pixels           <- r_n_obs_poss
+              r_agg$n_non_na_pixels    <- r_n_obs
+              r_agg$prop_non_na_pixels <- r_agg$n_non_na_pixels / r_agg$n_pixels 
+            }
+            
+            r_agg$date <- date_i
+            
+            #### Export
+            saveRDS(r_agg, out_path)
+            
           } else{
-            roi_df[[paste0("ntl_", aggregation_fun)]] <- r_agg
-            r_agg <- roi_df
+            warning(paste0('"', out_path, '" already exists; skipping.\n'))
           }
           
-          if(add_n_pixels){
-            
-            r_n_obs <- exact_extract(r, roi_sf, function(values, coverage_fraction)
-              sum(!is.na(values)),
-              progress = !quiet)
-            
-            r_n_obs_poss <- exact_extract(r, roi_sf, function(values, coverage_fraction)
-              length(values),
-              progress = !quiet)
-            
-            r_agg$n_pixels           <- r_n_obs_poss
-            r_agg$n_non_na_pixels    <- r_n_obs
-            r_agg$prop_non_na_pixels <- r_agg$n_non_na_pixels / r_agg$n_pixels 
-          }
-          
-          r_agg$date <- date_i
-          
-          #### Export
-          saveRDS(r_agg, out_path)
-          
-        } else{
-          warning(paste0('"', out_path, '" already exists; skipping.\n'))
         }
         
         r_out <- NULL # Saving as file, so output from function should be NULL
@@ -914,6 +824,7 @@ bm_extract <- function(roi_sf,
                              quality_flag_rm = quality_flag_rm,
                              check_all_tiles_exist = check_all_tiles_exist,
                              h5_dir = h5_dir,
+                             download_method = download_method,
                              quiet = quiet,
                              temp_dir = temp_dir)
         names(r_out) <- date_name_i
@@ -1024,12 +935,13 @@ bm_extract <- function(roi_sf,
 #' To see all variable choices, set `variable = ""` (this will create an error message that lists all valid variables). For additional information on variable choices, see [here](https://ladsweb.modaps.eosdis.nasa.gov/api/v2/content/archives/Document%20Archive/Science%20Data%20Product%20Documentation/VIIRS_Black_Marble_UG_v1.2_April_2021.pdf); for `VNP46A1`, see Table 3; for `VNP46A2` see Table 6; for `VNP46A3` and `VNP46A4`, see Table 9.
 #' @param quality_flag_rm Quality flag values to use to set values to `NA`. Each pixel has a quality flag value, where low quality values can be removed. Values are set to `NA` for each value in the `quality_flag_rm` vector. Note that `quality_flag_rm` does not apply for `VNP46A1`. (Default: `NULL`).
 #'
-#'
 #' For `VNP46A2` (daily data):
-#' - `0`: High-quality, Persistent nighttime lights
-#' - `1`: High-quality, Ephemeral nighttime Lights
-#' - `2`: Poor-quality, Outlier, potential cloud contamination, or other issues
-#'
+#' - `0`: High-quality
+#' - `1`: Poor-quality - Main Algorithm (Outlier, Potential cloud contamination or other issues)
+#' - `2`: Poor-quality - Main Algorithm (high solar zenith angle 102-108 degrees)
+#' - `3`: Poor-quality - Main Algorithm (Lunar eclipse)
+#' - `4`: Poor-quality - Main Algorithm (Aurora)
+#' - `5`: Poor-quality - Main Algorithm (Glint)
 #'
 #' For `VNP46A3` and `VNP46A4` (monthly and annual data):
 #' - `0`: Good-quality, The number of observations used for the composite is larger than 3
@@ -1044,6 +956,7 @@ bm_extract <- function(roi_sf,
 #' @param file_skip_if_exists Whether the function should first check wither the file already exists, and to skip downloading or extracting data if the data for that date if the file already exists (default: `TRUE`).
 #' @param file_return_null Whether to return `NULL` instead of a `SpatRaster`. When `output_location_type = 'file'`, the function will export data to the `file_dir` directory. When `file_return_null = FALSE`, the function will also return a `SpatRaster` of the queried data---so the data is available in R memory. Setting `file_return_null = TRUE`, data will be saved to `file_dir` but no data will be returned by the function to R memory (default: `FALSE`).
 #' @param h5_dir Black Marble data are originally downloaded as `h5` files. If `h5_dir = NULL`, the function downloads to a temporary directory then deletes the directory. If `h5_dir` is set to a path, `h5` files are saved to that directory and not deleted. The function will then check if the needed `h5` file already exists in the directory; if it exists, the function will not re-download the `h5` file.
+#' @param download_method Method to download data from NASA LAADS Archive: "`httr`" or "`wget`". If `httr`, uses the `httr2` R package to download data. If `wget`, uses the `wget` command line tool. `httr` is fully integrated in R, while `wget` requires the `wget` system command. `wget` can be more efficient and can help avoid network issues. (Default: `"httr"`).
 #' @param quiet Suppress output that show downloading progress and other messages. (Default: `FALSE`).
 #' @param ... Additional arguments for `terra::approximate`, if `interpol_na = TRUE`
 #'
@@ -1106,6 +1019,7 @@ bm_raster <- function(roi_sf,
                       file_skip_if_exists = TRUE,
                       file_return_null = FALSE,
                       h5_dir = NULL,
+                      download_method = "httr",
                       quiet = FALSE,
                       ...){
   
@@ -1169,7 +1083,6 @@ bm_raster <- function(roi_sf,
     #out <- tryCatch(
     #  {
     
-    
     #### Make name for raster based on date
     date_name_i <- define_date_name(date_i, product_id)
     
@@ -1197,11 +1110,14 @@ bm_raster <- function(roi_sf,
                          quality_flag_rm = quality_flag_rm,
                          check_all_tiles_exist = check_all_tiles_exist,
                          h5_dir = h5_dir,
+                         download_method = download_method,
                          quiet = quiet,
                          temp_dir = temp_dir)
-        names(r) <- date_name_i
         
-        terra::writeRaster(r, out_path)
+        if(!is.null(r)){
+          names(r) <- date_name_i
+          terra::writeRaster(r, out_path)
+        }
         
       } else{
         message(paste0('"', out_path, '" already exists; skipping.\n'))
@@ -1219,23 +1135,16 @@ bm_raster <- function(roi_sf,
                            quality_flag_rm = quality_flag_rm,
                            check_all_tiles_exist = check_all_tiles_exist,
                            h5_dir = h5_dir,
+                           download_method = download_method,
                            quiet = quiet,
                            temp_dir = temp_dir)
-      names(r_out) <- date_name_i
+      if(!is.null(r_out)){
+        names(r_out) <- date_name_i
+      }
       
     }
     
     return(r_out)
-    
-    # TRY START   
-    #   },
-    #    error=function(e) {
-    #      return(NULL)
-    #    }
-    #  )
-    # TRY END 
-    
-    
     
   })
   
@@ -1281,8 +1190,12 @@ bm_raster <- function(roi_sf,
       all_files <- list.files(file_dir)
       out_name <- out_name[out_name %in% all_files]
       
-      r <- file.path(file_dir, out_name) %>%
-        rast()
+      if(length(out_name) > 0){
+        r <- file.path(file_dir, out_name) %>%
+          rast()
+      } else{
+        r <- NULL
+      }
       
     } else{
       r <- NULL
@@ -1300,6 +1213,7 @@ bm_raster_i <- function(roi_sf,
                         quality_flag_rm,
                         check_all_tiles_exist,
                         h5_dir,
+                        download_method,
                         quiet,
                         temp_dir){
   
@@ -1336,60 +1250,303 @@ bm_raster_i <- function(roi_sf,
                                         months = month,
                                         days = day)
   
-  
-  # Intersecting tiles ---------------------------------------------------------
-  # Remove grid along edges, which causes st_intersects to fail
-  bm_tiles_sf <- bm_tiles_sf[!(bm_tiles_sf$TileID %>% str_detect("h00")),]
-  bm_tiles_sf <- bm_tiles_sf[!(bm_tiles_sf$TileID %>% str_detect("v00")),]
-  
-  
-  inter <- tryCatch(
-    {
+  # Only move forward if dataset exists ---
+  if(nrow(bm_files_df) == 0){
+    warning(paste0("No satellite imagery exists for ", date, "; skipping"))
+    r <- NULL
+  } else{
+    
+    # Intersecting tiles ---------------------------------------------------------
+    # Remove grid along edges, which causes st_intersects to fail
+    bm_tiles_sf <- bm_tiles_sf[!(bm_tiles_sf$TileID %>% str_detect("h00")),]
+    bm_tiles_sf <- bm_tiles_sf[!(bm_tiles_sf$TileID %>% str_detect("v00")),]
+    
+    inter <- tryCatch({
+      # Approach 1: Simple intersection
+      
       inter <- st_intersects(bm_tiles_sf, roi_sf, sparse = F) %>%
         apply(1, sum)
       
       inter
-    },
-    error = function(e){
-      warning("Issue with `roi_sf` intersecting with blackmarble tiles; try buffering by a width of 0: eg, st_buffer(roi_sf, 0)")
-      stop("Issue with `roi_sf` intersecting with blackmarble tiles; try buffering by a width of 0: eg, st_buffer(roi_sf, 0)")
-    }
-  )
-  
-  grid_use_sf <- bm_tiles_sf[inter > 0,]
-  
-  # Make Raster ----------------------------------------------------------------
-  tile_ids_rx <- grid_use_sf$TileID %>% paste(collapse = "|")
-  bm_files_df <- bm_files_df[bm_files_df$name %>% str_detect(tile_ids_rx),]
-  
-  if( (nrow(bm_files_df) < nrow(grid_use_sf)) & check_all_tiles_exist){
-    warning("Not all satellite imagery tiles for this location exist, so skipping. To ignore this error and process anyway, set check_all_tiles_exist = FALSE")
-    stop("Not all satellite imagery tiles for this location exist, so skipping. To ignore this error and process anyway, set check_all_tiles_exist = FALSE")
-  }
-  
-  unlink(file.path(temp_dir, product_id), recursive = T)
-  
-  if(quiet == F){
-    message(paste0("Processing ", nrow(bm_files_df), " nighttime light tiles"))
-  }
-  
-  r_list <- lapply(bm_files_df$name, function(name_i){
-    download_raster(name_i, temp_dir, variable, bearer, quality_flag_rm, h5_dir, quiet)
-  })
-  
-  if(length(r_list) == 1){
-    r <- r_list[[1]]
-  } else{
+      
+    }, error = function(e1) {
+      # If approach 1 fails, try intersect on bounding box
+      tryCatch({
+        
+        warning("Issue with `roi_sf` intersecting with blackmarble tiles; trying bounding box intersection. To avoid, try: roi_sf %>% st_make_valid()")
+        
+        roi_bbox_sf <- roi_sf %>%
+          st_bbox() %>%
+          st_as_sfc() %>%
+          st_as_sf()
+        
+        inter <- st_intersects(bm_tiles_sf, roi_bbox_sf, sparse = F) %>%
+          apply(1, sum)
+        
+        inter
+        
+      }, error = function(e2) {
+        # If both fail
+        
+        warning("Issue with `roi_sf` intersecting with blackmarble tiles; try buffering by a width of 0: eg, st_buffer(roi_sf, 0)")
+        stop("Issue with `roi_sf` intersecting with blackmarble tiles; try buffering by a width of 0: eg, st_buffer(roi_sf, 0)", , e2$message)
+        
+      })
+    })
     
-    r <- do.call(terra::mosaic, c(r_list, fun = "max"))
+    # inter <- tryCatch(
+    #   {
+    #     inter <- st_intersects(bm_tiles_sf, roi_sf, sparse = F) %>%
+    #       apply(1, sum)
+    #     
+    #     inter
+    #   },
+    #   error = function(e){
+    #     warning("Issue with `roi_sf` intersecting with blackmarble tiles; try buffering by a width of 0: eg, st_buffer(roi_sf, 0)")
+    #     stop("Issue with `roi_sf` intersecting with blackmarble tiles; try buffering by a width of 0: eg, st_buffer(roi_sf, 0)")
+    #   }
+    # )
+    
+    grid_use_sf <- bm_tiles_sf[inter > 0,]
+    
+    # Make Raster ----------------------------------------------------------------
+    tile_ids_rx <- grid_use_sf$TileID %>% paste(collapse = "|")
+    
+    if(nrow(grid_use_sf) > 0){
+      bm_files_df <- bm_files_df[bm_files_df$name %>% str_detect(tile_ids_rx),]
+    } else{
+      bm_files_df <- data.frame(NULL)
+    }
+    
+    if(nrow(bm_files_df) == 0){
+      warning(paste0("No satellite imagery exists for ", date, "; skipping"))
+      r <- NULL
+    } else{
+      
+      if( (nrow(bm_files_df) < nrow(grid_use_sf)) & check_all_tiles_exist){
+        warning("Not all satellite imagery tiles for this location exist, so skipping. To ignore this error and process anyway, set check_all_tiles_exist = FALSE")
+        #stop("Not all satellite imagery tiles for this location exist, so skipping. To ignore this error and process anyway, set check_all_tiles_exist = FALSE")
+      }
+      
+      unlink(file.path(temp_dir, product_id), recursive = T)
+      
+      if(quiet == F){
+        message(paste0("Processing ", nrow(bm_files_df), " nighttime light tiles"))
+      }
+      
+      r_list <- lapply(bm_files_df$name, function(name_i){
+        download_raster(name_i, temp_dir, variable, bearer, quality_flag_rm, h5_dir, download_method, quiet)
+      })
+      
+      if(length(r_list) == 1){
+        r <- r_list[[1]]
+      } else{
+        
+        r <- do.call(terra::mosaic, c(r_list, fun = "max"))
+      }
+      
+      ## Crop
+      r <- r %>% terra::crop(roi_sf)
+      
+      unlink(file.path(temp_dir, product_id), recursive = T)
+      
+    }
+  }
+  return(r)
+}
+
+#' Download h5 files using wget
+#'
+#' Download h5 files from from [NASA Black Marble data](https://blackmarble.gsfc.nasa.gov/) using `wget`. The wget_h5_files() function requires the wget command line tool to be installed on your system. If you do not have wget installed, please install it from https://www.gnu.org/software/wget/.
+#'
+#' @param roi_sf Region of interest; sf polygon. Must be in the [WGS 84 (epsg:4326)](https://epsg.io/4326) coordinate reference system. If `NULL`, all `h5` files for the inputted date(s) are downloaded.
+#' @param product_id One of the following:
+#' * `"VNP46A1"`: Daily (raw)
+#' * `"VNP46A2"`: Daily (corrected)
+#' * `"VNP46A3"`: Monthly
+#' * `"VNP46A4"`: Annual
+#' @param date Date(s) to download `h5` files. 
+#' * For `product_id`s `"VNP46A1"` and `"VNP46A2"`, a date (eg, `"2021-10-03"`).
+#' * For `product_id` `"VNP46A3"`, a date or year-month (e.g., `"2021-10-01"`, where the day will be ignored, or `"2021-10"`).
+#' * For `product_id` `"VNP46A4"`, year or date  (e.g., `"2021-10-01"`, where the month and day will be ignored, or `2021`).
+#' @param h5_dir Path to download `h5` files to.
+#' @param bearer NASA bearer token. For instructions on how to create a token, see [here](https://github.com/worldbank/blackmarbler#bearer-token-).
+#'
+#' @return `NULL`
+#'
+#' @author Robert Marty <rmarty@@worldbank.org>
+#' @examples
+#' \dontrun{
+#' # Define bearer token
+#' bearer <- "BEARER-TOKEN-HERE"
+#'
+#' # sf polygon of Ghana
+#' library(geodata)
+#' roi_sf <- gadm(country = "GHA", level=0, path = tempdir()) %>% st_as_sf()
+#'
+#' # h5 files for Ghana for October 3, 2021
+#' download_h5_files(roi_sf = roi_sf,
+#'                   product_id = "VNP46A2",
+#'                   date = "2021-10-03",
+#'                   h5_dir = getwd(),        
+#'                   bearer = bearer)
+#'
+#' # Make raster using h5_files
+#' ken_202103_r <- bm_raster(roi_sf = roi_sf,
+#'                           product_id = "VNP46A3",
+#'                           date = "2021-03-01",
+#'                           bearer = bearer,
+#'                           h5_dir = getwd())
+#'
+#'}
+#'
+#' @export
+wget_h5_files <- function(roi_sf = NULL,
+                          product_id,
+                          date,
+                          h5_dir, 
+                          bearer){
+  message("The wget_h5_files() function requires the wget command line tool to be installed on your system. If you do not have wget installed, please install it from https://www.gnu.org/software/wget/.")
+  
+  # Input checks ---------------------------------------------------------------
+  # Ensure the output directory exists
+  if (!dir.exists(h5_dir)) {
+    stop(h5_dir, " doesn't exist")
   }
   
-  ## Crop
-  r <- r %>% terra::crop(roi_sf)
-  
-  unlink(file.path(temp_dir, product_id), recursive = T)
-  
-  return(r)
+  for(date_i in date){
+    
+    # Prep dates -----------------------------------------------------------------
+    ## For monthly, allow both yyyy-mm and yyyy-mm-dd (where -dd is ignored)
+    if(product_id == "VNP46A3"){
+      
+      if(nchar(date_i) %in% 7){
+        date_i <- paste0(date_i, "-01")
+      }
+      
+    }
+    
+    ## For year, allow both yyyy and yyyy-mm-dd (where -mm-dd is ignored)
+    if(product_id == "VNP46A4"){
+      
+      if(nchar(date_i) %in% 4){
+        date_i <- paste0(date_i, "-01-01")
+      }
+      
+    }
+    
+    date_i <- date_i %>% ymd()
+    
+    year  <- date_i %>% year()
+    month <- date_i %>% month()
+    day   <- date_i %>% yday() %>% pad3()
+    
+    date_text <- paste0(year, "/", day)
+    
+    # Grab tile dataframe --------------------------------------------------------
+    if(!is.null(roi_sf)){
+      
+      bm_tiles_sf <- read_sf("https://raw.githubusercontent.com/worldbank/blackmarbler/main/data/blackmarbletiles.geojson")
+      
+      bm_files_df <- create_dataset_name_df(product_id = product_id,
+                                            all = T,
+                                            years = year,
+                                            months = month,
+                                            days = day)
+      
+      # Only move forward if dataset exists ---
+      if(nrow(bm_files_df) == 0){
+        warning(paste0("No satellite imagery exists for ", date_i, "; skipping"))
+      } else{
+        
+        # Intersecting tiles ---------------------------------------------------------
+        # Remove grid along edges, which causes st_intersects to fail
+        bm_tiles_sf <- bm_tiles_sf[!(bm_tiles_sf$TileID %>% str_detect("h00")),]
+        bm_tiles_sf <- bm_tiles_sf[!(bm_tiles_sf$TileID %>% str_detect("v00")),]
+        
+        inter <- tryCatch({
+          # Approach 1: Simple intersection
+          
+          inter <- st_intersects(bm_tiles_sf, roi_sf, sparse = F) %>%
+            apply(1, sum)
+          
+          inter
+          
+        }, error = function(e1) {
+          # If approach 1 fails, try intersect on bounding box
+          tryCatch({
+            
+            warning("Issue with `roi_sf` intersecting with blackmarble tiles; trying bounding box intersection. To avoid, try: roi_sf %>% st_make_valid()")
+            
+            roi_bbox_sf <- roi_sf %>%
+              st_bbox() %>%
+              st_as_sfc() %>%
+              st_as_sf()
+            
+            inter <- st_intersects(bm_tiles_sf, roi_bbox_sf, sparse = F) %>%
+              apply(1, sum)
+            
+            inter
+            
+          }, error = function(e2) {
+            # If both fail
+            
+            warning("Issue with `roi_sf` intersecting with blackmarble tiles; try buffering by a width of 0: eg, st_buffer(roi_sf, 0)")
+            stop("Issue with `roi_sf` intersecting with blackmarble tiles; try buffering by a width of 0: eg, st_buffer(roi_sf, 0)", , e2$message)
+            
+          })
+        })
+        
+        grid_use_sf <- bm_tiles_sf[inter > 0,]
+        
+        # Make Raster ----------------------------------------------------------------
+        tile_ids_rx <- grid_use_sf$TileID %>% paste(collapse = "|")
+        
+        if(nrow(grid_use_sf) > 0){
+          bm_files_df <- bm_files_df[bm_files_df$name %>% str_detect(tile_ids_rx),]
+        } else{
+          bm_files_df <- data.frame(NULL)
+        }
+        
+        if(nrow(bm_files_df) == 0){
+          warning(paste0("No satellite imagery exists for ", date_i, "; skipping"))
+        } 
+        
+      }
+      
+    }
+    
+    # Run wget command: All h5 files (roi_sf is null)  -------------------------
+    if(is.null(roi_sf)){
+      
+      cmd <- sprintf(
+        'wget --no-verbose -e robots=off -m -np -R .html,.tmp -nH --cut-dirs=6 "https://ladsweb.modaps.eosdis.nasa.gov/archive/allData/5200/VNP46A4/%s/" --header="Authorization: Bearer %s" -P "%s"',
+        date_text,
+        bearer,
+        h5_dir
+      )
+      
+      system(cmd)
+      
+    } else{
+      
+      if(nrow(bm_files_df) > 0){
+        for(file_i in bm_files_df$downloadsLink){
+          
+          cmd <- sprintf(
+            'wget --no-verbose -e robots=off -m -np -R .html,.tmp -nH --cut-dirs=6 "%s" --header="Authorization: Bearer %s" -P "%s"',
+            file_i,
+            bearer,
+            h5_dir
+          )
+          
+          system(cmd)
+          
+        }
+      }
+    }
+    
+  }
 }
 
 

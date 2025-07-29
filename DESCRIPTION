@@ -1,6 +1,6 @@
 Package: blackmarbler
 Title: Black Marble Data and Statistics
-Version: 0.2.4
+Version: 0.2.5
 Authors@R: 
     c(person("Robert", "Marty", , "rmarty@worldbank.org", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-3164-3813")),
@@ -17,10 +17,11 @@ Imports: readr, dplyr, purrr, lubridate, tidyr, terra, sf,
 Suggests: geodata, ggplot2, knitr, tidyterra, testthat (>= 3.0.0)
 Config/testthat/edition: 3
 NeedsCompilation: no
-Packaged: 2025-01-07 15:21:49 UTC; robmarty
-Author: Robert Marty [aut, cre] (<https://orcid.org/0000-0002-3164-3813>),
-  Gabriel Stefanini Vicente [aut]
-    (<https://orcid.org/0000-0001-6530-3780>)
+Packaged: 2025-07-29 20:43:41 UTC; robmarty
+Author: Robert Marty [aut, cre] (ORCID:
+    <https://orcid.org/0000-0002-3164-3813>),
+  Gabriel Stefanini Vicente [aut] (ORCID:
+    <https://orcid.org/0000-0001-6530-3780>)
 Maintainer: Robert Marty <rmarty@worldbank.org>
 Repository: CRAN
-Date/Publication: 2025-01-07 15:50:05 UTC
+Date/Publication: 2025-07-29 21:00:03 UTC

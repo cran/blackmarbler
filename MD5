@@ -1,9 +1,9 @@
-f012faf4dd444c93daf829599ae8eb10 *DESCRIPTION
+e63170437ab9992b65c435110f9ba179 *DESCRIPTION
 e1c92c8255d8c470bf6a39bd99cd8322 *LICENSE
-b396716e34638f786c22bd255ed628df *NAMESPACE
-1875d899733fafefbc75f6c5f091d525 *R/blackmarbler.R
-7fef94be05d45be8b745b727b8e73662 *man/bm_extract.Rd
-c1ff00a1bb044da2ec40b9a73c17e706 *man/bm_raster.Rd
+a7d9867e98eb001a7a04da818c777aaf *NAMESPACE
+8db8731dabb10411bbc4c310615b5370 *R/blackmarbler.R
+99cfc8272e8c4a6dbc6ab98c150a257d *man/bm_extract.Rd
+f4f6f52746a2d8c2731269805ac96e9e *man/bm_raster.Rd
 8b3ee27f518efcdf76e233becb083a78 *man/figures/_archive/nasa_laads_login.png
 b79c475901360962536fe77cb50ef001 *man/figures/logo.png
 bd426414b0bab84a8c1ed60a66590fcb *man/figures/nasa_laads_login.png
@@ -14,6 +14,7 @@ b391aad9a619ef41f8147faa75684603 *man/figures/nasa_login_3.png
 421c7bb2bb9784bfaf328df9f63471c9 *man/figures/ntl_gha.png
 f575112ef9f499d7f33e468e06b0fa48 *man/figures/ntl_trends_gha.png
 d176de39c3da36a6e251744138be7616 *man/get_nasa_token.Rd
+668792161d8b346a643f7725041a805a *man/wget_h5_files.Rd
 a6b02e23974ccc0263d8ffb391fa9aa5 *tests/testthat.R
 574d7318c1c94c861450a7c13eed3392 *tests/testthat/test-bm_extract.R
 54f19eeee2204c15cb569132a190840b *tests/testthat/test-bm_raster.R

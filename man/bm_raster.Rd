@@ -19,6 +19,7 @@ bm_raster(
   file_skip_if_exists = TRUE,
   file_return_null = FALSE,
   h5_dir = NULL,
+  download_method = "httr",
   quiet = FALSE,
   ...
 )
@@ -55,9 +56,12 @@ To see all variable choices, set \code{variable = ""} (this will create an error
 
 For \code{VNP46A2} (daily data):
 \itemize{
-\item \code{0}: High-quality, Persistent nighttime lights
-\item \code{1}: High-quality, Ephemeral nighttime Lights
-\item \code{2}: Poor-quality, Outlier, potential cloud contamination, or other issues
+\item \code{0}: High-quality
+\item \code{1}: Poor-quality - Main Algorithm (Outlier, Potential cloud contamination or other issues)
+\item \code{2}: Poor-quality - Main Algorithm (high solar zenith angle 102-108 degrees)
+\item \code{3}: Poor-quality - Main Algorithm (Lunar eclipse)
+\item \code{4}: Poor-quality - Main Algorithm (Aurora)
+\item \code{5}: Poor-quality - Main Algorithm (Glint)
 }
 
 For \code{VNP46A3} and \code{VNP46A4} (monthly and annual data):
@@ -83,6 +87,8 @@ For \code{output_location_type = file}:}
 \item{file_return_null}{Whether to return \code{NULL} instead of a \code{SpatRaster}. When \code{output_location_type = 'file'}, the function will export data to the \code{file_dir} directory. When \code{file_return_null = FALSE}, the function will also return a \code{SpatRaster} of the queried data---so the data is available in R memory. Setting \code{file_return_null = TRUE}, data will be saved to \code{file_dir} but no data will be returned by the function to R memory (default: \code{FALSE}).}
 
 \item{h5_dir}{Black Marble data are originally downloaded as \code{h5} files. If \code{h5_dir = NULL}, the function downloads to a temporary directory then deletes the directory. If \code{h5_dir} is set to a path, \code{h5} files are saved to that directory and not deleted. The function will then check if the needed \code{h5} file already exists in the directory; if it exists, the function will not re-download the \code{h5} file.}
+
+\item{download_method}{Method to download data from NASA LAADS Archive: "\code{httr}" or "\code{wget}". If \code{httr}, uses the \code{httr2} R package to download data. If \code{wget}, uses the \code{wget} command line tool. \code{httr} is fully integrated in R, while \code{wget} requires the \code{wget} system command. \code{wget} can be more efficient and can help avoid network issues. (Default: \code{"httr"}).}
 
 \item{quiet}{Suppress output that show downloading progress and other messages. (Default: \code{FALSE}).}
 
